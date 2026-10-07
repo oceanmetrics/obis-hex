@@ -43,11 +43,12 @@
   let host: HTMLDivElement;
   $effect(() => {
     void value;
+    void items.length;
     const t = setTimeout(() => {
       const list = host?.querySelector<HTMLElement>(".list");
       const opt = list?.querySelector<HTMLElement>('[role="option"][aria-selected="true"]');
       if (list && opt) list.scrollTop = Math.max(0, opt.offsetTop - list.clientHeight / 3);
-    }, 0);
+    }, 60);
     return () => clearTimeout(t);
   });
 
