@@ -1,0 +1,38 @@
+{
+  "name": "obis-hex",
+  "private": true,
+  "version": "0.1.0",
+  "description": "OBIS biodiversity indicators on H3 hexagons, computed from Parquet in the browser",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "size-budget": "node scripts/size-budget.mjs",
+    "dev:local": "VITE_DATA_BASE=/obis-hex/local-data/ vite"
+  },
+  "dependencies": {
+    "@deck.gl/core": "9.4.0",
+    "@deck.gl/geo-layers": "9.4.0",
+    "@deck.gl/layers": "9.4.0",
+    "@deck.gl/mapbox": "9.4.0",
+    "@duckdb/duckdb-wasm": "1.32.0",
+    "h3-js": "4.4.0",
+    "maplibre-gl": "^6.10.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "@tsconfig/svelte": "^5.0.8",
+    "@types/node": "^24.13.3",
+    "svelte": "^5.57.0",
+    "svelte-check": "^4.7.6",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
+  }
+}

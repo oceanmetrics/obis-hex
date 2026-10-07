@@ -1,0 +1,65 @@
+{
+  "release": "demo",
+  "obis_snapshot": "demo",
+  "store": "obis_h3_satlantic_v20260728.duckdb",
+  "obisindicators_version": "0.7.0",
+  "duckdb_version": "v1.5.5",
+  "built_at": "2026-10-07T17:23:39Z",
+  "esn": 50,
+  "res": [1, 2, 3, 4, 5, 6, 7],
+  "res_decade": [1, 2, 3, 4, 5],
+  "decades": [1960, 1970, 1980, 1990, 2000, 2010, 2020],
+  "compression": "zstd",
+  "layers": {
+    "all": {
+      "path": "all",
+      "partitions": ["res"],
+      "template": "all/res=<res>/data_0.parquet",
+      "rows": 598384,
+      "files": 7,
+      "bytes": 4033052
+    },
+    "taxon": {
+      "path": "taxon",
+      "partitions": ["rank", "taxon", "res"],
+      "template": "taxon/rank=<rank>/taxon=<taxon>/res=<res>/data_0.parquet",
+      "rows": 0,
+      "files": 0,
+      "bytes": 0
+    },
+    "decade_all": {
+      "path": "decade/all",
+      "partitions": ["decade", "res"],
+      "template": "decade/all/decade=<decade>/res=<res>/data_0.parquet",
+      "rows": 125839,
+      "files": 35,
+      "bytes": 1623868
+    }
+  },
+  "columns": {
+    "h3": "H3 cell index as a lowercase hex string (deck.gl H3HexagonLayer getHexagon)",
+    "cell_id": "H3 cell index as BIGINT (same cell as h3)",
+    "n": "number of occurrence records",
+    "sp": "species richness (distinct species names)",
+    "shannon": "Shannon diversity H' = -sum(p_i ln p_i) over species",
+    "simpson": "Simpson index sum(p_i^2) over species",
+    "es": "Hurlbert expected number of species in a random draw of 50 records, ES(50); NULL where n < 50"
+  },
+  "stats": {
+    "file": "stats.parquet",
+    "columns": ["layer", "key", "rank", "decade", "res", "variable", "min", "p02", "p50", "p98", "max", "n_cells"],
+    "note": "one row per layer x key x decade x res x variable; n_cells counts cells with a non-NULL value (0 when all are NULL, e.g. es where every n < 50)"
+  },
+  "taxon_groups": {
+    "file": "taxon_groups.parquet",
+    "columns": ["kind", "rank", "taxon", "label", "n", "n_cells_res1", "path", "url_path"]
+  },
+  "encoding": "partition values are percent-encoded on disk by DuckDB (space = %20); fetch over HTTP with `url_path` (each % encoded as %25), or read with DuckDB hive_partitioning, which decodes them.",
+  "decade_note": "decade = floor(date_year / 10) * 10; records with no year are excluded; indicators computed with the same SQL as idx_h3 / idx_h3_eov.",
+  "files": {
+    "file": "files.parquet",
+    "columns": ["layer", "path", "url_path", "rows", "bytes"],
+    "n_files": 45,
+    "note": "manifest of every parquet file except itself (HTTP cannot glob)"
+  }
+}

@@ -1,0 +1,115 @@
+#!/usr/bin/env node
+// CLI wrapper around size-budget-core.mjs (copied from MarineSensitivity/atlas). Usage:
+//   node scripts/size-budget.mjs [--dist dist] [--entry index.html] [--budget-kb 650]
+//     [--worker-budget-kb 150] [--allow-marker name,...]
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join, relative, sep } from "node:path";
+import {
+  evaluateBudget,
+  CRITICAL_BUDGET_BYTES,
+  RUNTIME_WORKER_BUDGET_BYTES,
+  FORBIDDEN_LAZY_MARKERS,
+} from "./size-budget-core.mjs";
+
+function parseArgs(argv) {
+  const args = {
+    dist: "dist",
+    entry: "index.html",
+    budgetKb: CRITICAL_BUDGET_BYTES / 1024,
+    workerBudgetKb: RUNTIME_WORKER_BUDGET_BYTES / 1024,
+    allowMarkers: [],
+  };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--dist") args.dist = argv[++i];
+    else if (a === "--entry") args.entry = argv[++i];
+    else if (a === "--budget-kb") args.budgetKb = Number(argv[++i]);
+    else if (a === "--worker-budget-kb") args.workerBudgetKb = Number(argv[++i]);
+    else if (a === "--allow-marker") {
+      args.allowMarkers = argv[++i]
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    } else {
+      process.stderr.write(`unknown argument: ${a}\n`);
+      process.exit(2);
+    }
+  }
+  return args;
+}
+
+function loadManifest(distDir) {
+  // Vite 5+ writes build.manifest:true to <outDir>/.vite/manifest.json; older Vite wrote it at the
+  // outDir root. Accept either so this survives a Vite bump without a config change.
+  for (const rel of [".vite/manifest.json", "manifest.json"]) {
+    const p = join(distDir, rel);
+    if (existsSync(p)) return JSON.parse(readFileSync(p, "utf8"));
+  }
+  return null;
+}
+
+// N1: every file the build actually emitted, dist-relative with forward slashes (matching the
+// manifest's own path style) — the ground truth `findWorkerAssets`'s basename fallback searches when a
+// worker reference doesn't resolve where its own text naively says it should.
+function listEmittedFiles(dir, base = dir) {
+  const out = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...listEmittedFiles(full, base));
+    else out.push(relative(base, full).split(sep).join("/"));
+  }
+  return out;
+}
+
+const { dist, entry, budgetKb, workerBudgetKb, allowMarkers } = parseArgs(process.argv.slice(2));
+const manifest = loadManifest(dist);
+
+if (!manifest) {
+  process.stderr.write(
+    `size-budget: no manifest.json found under "${dist}" — did you run \`vite build\` (with build.manifest: true) first?\n`,
+  );
+  process.exit(1);
+}
+
+if (allowMarkers.length) {
+  process.stdout.write(`size-budget: --allow-marker dropped: ${allowMarkers.join(", ")}\n`);
+}
+const forbiddenMarkers = FORBIDDEN_LAZY_MARKERS.filter((m) => !allowMarkers.includes(m));
+
+const result = evaluateBudget({
+  manifest,
+  entryKey: entry,
+  readFile: (relPath) => readFileSync(join(dist, relPath)),
+  budgetBytes: budgetKb * 1024,
+  forbiddenMarkers,
+  workerBudgetBytes: workerBudgetKb * 1024,
+  emittedFiles: listEmittedFiles(dist),
+});
+
+const kb = (n) => (n / 1024).toFixed(1);
+process.stdout.write(
+  `size-budget: entry "${entry}" in "${dist}": ${result.files.length} static file(s), ${kb(result.totalGzipBytes)} KB gzip (budget ${kb(budgetKb * 1024)} KB)\n`,
+);
+for (const f of result.files) process.stdout.write(`  - ${f}\n`);
+
+// F3: runtime workers (a `?worker&url` asset referenced from the static graph) are printed and budgeted
+// separately — they are not part of the static <script> critical path, but they download at construction
+// time, before first interaction, so they count against the total the user waits on.
+process.stdout.write(
+  `size-budget: ${result.workerFiles.length} runtime worker(s), ${kb(result.workerGzipBytes)} KB gzip (budget ${kb(workerBudgetKb * 1024)} KB)\n`,
+);
+for (const f of result.workerFiles) process.stdout.write(`  - ${f}\n`);
+
+const combined = result.totalGzipBytes + result.workerGzipBytes;
+const combinedBudget = budgetKb * 1024 + workerBudgetKb * 1024;
+process.stdout.write(
+  `size-budget: combined static + runtime-worker, "before first interaction": ${kb(combined)} KB gzip (budget ${kb(combinedBudget)} KB)\n`,
+);
+
+if (!result.ok) {
+  process.stderr.write("size-budget: FAIL\n");
+  for (const reason of result.reasons) process.stderr.write(`  ✗ ${reason}\n`);
+  process.exit(1);
+}
+
+process.stdout.write("size-budget: PASS\n");
