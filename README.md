@@ -14,10 +14,13 @@ builds each cell from its H3 index.
 - **Indicator**: ES(50) (expected species per 50 records), species richness, Shannon H′,
   Simpson Σp², number of records.
 - **Layer**: all taxa, one of the 7 Essential Ocean Variables (IOOS definitions, as in
-  `obisindicators::obis_eov_seeds()`), or a taxon group (rank + taxon, from `taxon_groups.parquet`).
-- **Period**: all years, or a decade 1960s–2020s (all taxa and EOVs only, resolution ≤ 5).
-- **Resolution**: auto from zoom (the Shiny app's mapping, capped at 7, or 5 with a decade) or
-  pinned manually.
+  `obisindicators::obis_eov_seeds()`), a taxon group (rank + taxon, from `taxon_groups.parquet`),
+  or **any taxon (WoRMS)**: the children of any WoRMS AphiaID, at any rank, computed live by the
+  h3t subtree service (see "Any taxon (WoRMS)" below; the one layer not in the static release).
+- **Period**: all years, or a decade 1960s–2020s (all taxa and EOVs at resolution ≤ 5; any
+  resolution for a WoRMS taxon).
+- **Resolution**: auto from zoom (the Shiny app's mapping, capped at 7, or 5 with a decade on a
+  release layer) or pinned manually.
 - **Projection**: flat (web mercator) or globe (MapLibre's globe; see "Globe" below).
 - Viridis ramp over p02–p98, from the release's `stats.parquet` for that view (default) or from the
   loaded cells; fill opacity; dark or light CARTO basemap; hover tooltip; click for a cell panel;
@@ -29,8 +32,46 @@ builds each cell from its H3 index.
   explains itself.
 - Old links to the Shiny app open the same view here once Caddy redirects them (see "Legacy URLs").
 
-Not here: children of a WoRMS AphiaID (needs a small backend), custom SQL, year ranges finer
-than decades, report export.
+Not here: custom SQL, year ranges finer than decades, report export.
+
+## Any taxon (WoRMS): the subtree service
+
+The release precomputes all taxa, the EOVs and phylum/class/order groups. The children of an
+arbitrary WoRMS AphiaID (a genus, a family, a species with its subspecies, an infraorder like
+Cetacea) cannot be precomputed, so this one layer is served live by the h3t subtree endpoint
+(MarineSensitivity/server `h3t/`, `app/subtree.py`, a port of obisindicators' taxon-tree CTE and
+indicator SQL over the full OBIS H3 store). The app calls it through its Varnish cache,
+`https://h3tcache.marinesensitivity.org/h3t/` (override with `?h3t=https://…/h3t/` on the page URL
+or `VITE_H3T_BASE` at build time). Code: `src/lib/aphia/h3t.ts`, `src/components/AphiaSearch.svelte`.
+
+- **The control.** "Any taxon (WoRMS)" in the layer picker opens a search box (debounced 250 ms,
+  at least 2 letters) over `GET taxon?q=<prefix>&limit=20`, listing name · rank · status · records
+  (accepted names first). Choosing a row sets the layer key `aphia:<id>` in the hash
+  (`#l=aphia:137092`). The title line and the panel show the WoRMS name and rank from
+  `GET taxon/<id>`, with a "▸ in WoRMS" link to marinespecies.org. A synonym is kept as chosen
+  (the endpoint resolves it to the accepted subtree) and shown as "synonym → accepted name".
+- **Data path.** Below res 6, one request per (AphiaID, res, decade) for the whole globe:
+  `GET subtree?aphiaid=<id>&res=<r>[&decade=<d>]`. From res 6 the endpoint needs a bbox, so the
+  app sends the viewport plus a 25 % margin, rounded outward to 0.5° (wrapped at the antimeridian;
+  `w > e` crosses it) and refetches on `moveend` only when that rounded box changes, so small pans
+  reuse the response. The app fetches the Parquet itself (for the status, `X-Rows`, `X-Query-Ms`
+  and a 65 s timeout), registers the bytes with DuckDB-WASM and inserts them into the same
+  `part_cache` table the parent partitions use, keyed by the request URL (`Engine.loadRemote()`),
+  so indicators, ramp, hover, cell panel and stats work unchanged and a revisited view is not
+  refetched. The ramp domain comes from the loaded cells (there are no release stats; the
+  "release" option is disabled). The footer shows bytes, rows, the server's query time
+  (`X-Query-Ms`) and the browser's round trip; the SQL panel shows the request URL instead.
+- **Limits** (the service's, see its README "Subtree endpoint"): at most 200,000 cells per
+  response (413), a bbox required from res 6 (400), a 60 s query timeout (504), 2 concurrent
+  queries. On 413 the app steps down one resolution at a time (back to one global request below
+  res 6) and says so ("Over 200,000 cells at res 7 in this view: showing res 5. Zoom in for res
+  7."); 413s are remembered for 60 s, as the cache does. Other errors and timeouts are one line in
+  the stats panel, never a silent blank map. A health probe (`GET health?t=<now>`, cache-busted)
+  at startup greys the option out when the service is down.
+- **Timings** (2026-10-08, from the browser, cache misses): Megaptera novaeangliae (137092) res 4
+  48.6 KB, 11,645 cells, 2.4 s on the server; Cetacea (2688) res 3 139 KB, 14,973 cells, 1.5 s;
+  class Mammalia (1837) res 7 over Monterey Bay 9.3 KB, 531 cells, 2.2 s; Animalia (2) res 5 is
+  over the cap, so res 4: 2.3 MB, 180,091 cells, 7.9 s. Repeats come from Varnish (7 days).
 
 ## Data layout (v2)
 
@@ -114,8 +155,9 @@ land they read as near-black, as in the Shiny app.
 `https://oceanmetrics.io/obis-hex/?legacy=<bookmark>` (Caddy block and the full mapping table in
 [docs/redirect.md](docs/redirect.md)). On load the app maps the Shiny bookmark
 (`src/lib/state/legacy.ts`) to its hash state, shows a one-line notice when the old view could only
-be approximated (an AphiaID subtree, custom SQL, a family/genus/species filter, a year range that is
-not one decade), and removes `?legacy=` from the address bar.
+be approximated (custom SQL, a family/genus/species filter, a year range that is not one decade,
+several AphiaIDs at once), and removes `?legacy=` from the address bar. "Children of AphiaID"
+bookmarks map exactly to the live `aphia:<id>` layer.
 
 ## Figures
 
@@ -165,17 +207,18 @@ subset of it (including three res-7 parent partitions), so the engine tests also
 
 `npm run size-budget` (copied from MarineSensitivity/atlas) gzips everything `index.html` loads
 through static imports and fails if it exceeds the budget or if DuckDB-WASM leaks into that graph.
-Measured at 0.2.0 (2026-10-07):
+Measured at 0.3.0 (2026-10-08):
 
 | | gzip | budget |
 |---|---|---|
-| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 597.5 KB | 650 KB |
+| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB | 650 KB |
 | runtime worker (MapLibre's) | 140.2 KB | 150 KB |
 | DuckDB-WASM (lazy: JS chunk 45 KB, wasm ~7.8 MB) | not counted | must stay lazy |
 
 The atlas budget is 450 KB; deck.gl and h3-js add roughly 300 KB, hence 650 KB here. The viewport
 code (`polygonToCells`, `gridDisk`) uses the h3-js already in the bundle for deck.gl, so 0.2.0 (viewport loading,
-globe toggle, legacy links) added 4 KB and the budget is unchanged.
+globe toggle, legacy links) added 4 KB and 0.3.0 (the WoRMS taxon search and subtree loader) another
+4 KB; the budget is unchanged.
 
 ## Deploy
 

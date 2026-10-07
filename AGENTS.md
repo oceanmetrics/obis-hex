@@ -18,6 +18,12 @@ Conventions for anyone (human or agent) changing obis-hex.
   `@duckdb/duckdb-wasm` is pinned to exactly 1.32.0; do not caret it.
 - **Every query goes through `Engine`** (one connection, one promise chain; whole files cached by
   URL, parent partitions in the DuckDB table `part_cache`, unioned per view by `loadUnion()`). User values reach SQL only through `lit()` (`src/lib/engine/sql.ts`).
+- **One live layer.** `aphia:<id>` (children of a WoRMS AphiaID) is the only layer not in the
+  release: it comes from the h3t subtree service (`src/lib/aphia/h3t.ts`; limits in README, "Any
+  taxon (WoRMS)"). Its response still goes through `Engine.loadRemote()` into `part_cache`, so
+  every downstream panel treats it like a partition. Never call the service without a bbox at
+  res >= 6, keep the request URL's parameter order fixed (it is the cache key, in DuckDB and
+  in Varnish), and handle 413 by stepping down a resolution, not by retrying.
 - **Logic in plain `.ts`, tested.** Components only wire. Every rule (resolution mapping, ramp domain,
   manifest lookup, hash codec) has a vitest test with a small fixture; a bug fix adds a named
   regression test. `npm test`, `npm run check`, `npx tsc --noEmit` and the size budget must be green.
@@ -31,6 +37,8 @@ Conventions for anyone (human or agent) changing obis-hex.
 | `src/lib/state/url.ts` | AppState, hash codec, defaults |
 | `src/lib/state/resolution.ts` | zoom → res (Shiny app's breaks), caps 7 / 5 with a decade |
 | `src/lib/state/legacy.ts` | Shiny h3-db bookmark (`?legacy=`) → AppState + notice; Caddy side in `docs/redirect.md` |
+| `src/lib/aphia/h3t.ts` | the live AphiaID layer: h3t URLs, taxon search parsing, fetch, 413 fallback, health probe |
+| `src/components/AphiaSearch.svelte` | the debounced WoRMS name search |
 | `src/lib/view/viewport.ts` | viewport → parent cells (h3-js), the view plan and its fallback |
 | `src/lib/data/layers.ts` | indicators, EOVs, `LayerSel`, layer keys, manifest-layer mapping |
 | `src/lib/release/release.ts` | data base URL, `release.json` probe, metadata + stats SQL |
@@ -42,6 +50,7 @@ Conventions for anyone (human or agent) changing obis-hex.
 | `scripts/figures.mjs` | `npm run figures`: paper 2's figures from URL states → `figures/figA_*.png` |
 | `docs/redirect.md` | the Caddy redirect for app.marinesensitivity.org/h3-db and the legacy mapping table |
 | `tests/fixtures/release/` | a small real release subset for engine tests |
+| `tests/fixtures/h3t/` | real h3t responses: Megaptera novaeangliae res 4 Parquet, a taxon search, a synonym |
 
 ## How to add a layer
 
