@@ -57,12 +57,12 @@ becomes `https://oceanmetrics.io/obis-hex/#i=sp&l=eov:seagrasses&…&r=4&…`.
 | `preset` `"Corals & anemones (Anthozoa)"` | `l=taxon:class:Hexacorallia` | notice: Anthozoa is a subphylum; Octocorallia is a separate layer |
 | `custom_taxon` + `rank` phylum/class/order + `taxon_val` | `l=taxon:<rank>:<taxon_val>` | exact |
 | `custom_taxon` + family/genus/species | the preset's layer | notice |
-| `custom_aphiaid` + `aphiaid_val` | closest layer for known ids (1836 Aves, 2688 Cetacea → marine mammals EOV, 148899 Bacillariophyceae, the preset seeds), else the preset's layer | notice (needs a backend) |
+| `custom_aphiaid` + `aphiaid_val` | `l=aphia:<id>` (the live WoRMS subtree layer) | exact; with several ids the first, with a notice; a non-number keeps the preset's layer, with a notice |
 | `custom_sql` + `sql` | the EOV or taxon named in the SQL (`idx_h3_eov … eov = '…'`, `idx_h3_taxon … rank/taxon`), else all taxa; the indicator projected `AS value` | notice |
 | `years` `[1900, 2026]` | `p=all` | |
-| `years` inside one decade (1960s–2020s) | `p=<decade>` | notice unless exactly the decade; taxon groups have no decades (notice, all years) |
+| `years` inside one decade (1960s–2020s) | `p=<decade>` | notice unless exactly the decade; taxon groups have no decades (notice, all years); AphiaID layers do |
 | `years` across decades | `p=all` | notice |
-| `res` + `res_manual=true` | `r=<res>` (capped 7, or 5 with a decade) | |
+| `res` + `res_manual=true` | `r=<res>` (capped 7, or 5 with a decade on a release layer) | |
 | `res_manual=false` | `r=auto` | |
 | `opacity` 0–100 | `o=` 0–1 | |
 | `theme` | `t=` | |

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { autoRes, effectiveRes, ZOOM_BREAKS, zoomToRes } from "../src/lib/state/resolution";
+import { autoRes, effectiveRes, resCap, ZOOM_BREAKS, zoomToRes } from "../src/lib/state/resolution";
 
 describe("zoom → H3 resolution (port of the Shiny app's zoom_to_res)", () => {
   it("uses the same breaks as app.R", () => {
@@ -35,6 +35,13 @@ describe("zoom → H3 resolution (port of the Shiny app's zoom_to_res)", () => {
     expect(effectiveRes("auto", 3, 9, 1990)).toBe(5);
     expect(effectiveRes("manual", 7, 1, 1990)).toBe(5);
     expect(effectiveRes("manual", 7, 1, null)).toBe(7);
+  });
+
+  it("a live AphiaID layer keeps res 7 with a decade (the endpoint filters years itself)", () => {
+    expect(effectiveRes("auto", 3, 9, 1990, true)).toBe(7);
+    expect(effectiveRes("manual", 7, 1, 1990, true)).toBe(7);
+    expect(resCap(1990, true)).toBe(7);
+    expect(resCap(1990)).toBe(5);
   });
 
   it("manual ignores zoom", () => {

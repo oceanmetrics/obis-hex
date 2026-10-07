@@ -24,8 +24,10 @@ export function autoRes(zoom: number, cap: number = RES_MAX): number {
   return Math.min(zoomToRes(zoom), cap);
 }
 
-export function resCap(decade: number | null): number {
-  return decade === null ? RES_MAX : RES_DECADE_MAX;
+/** the resolution cap: 7, or 5 with a decade (the release's decade partitions stop at 5); a live
+ * AphiaID layer (`live`) filters decades on the server, so it keeps 7. */
+export function resCap(decade: number | null, live = false): number {
+  return decade === null || live ? RES_MAX : RES_DECADE_MAX;
 }
 
 /** the resolution a view uses: auto follows the zoom, manual is the pinned value; both capped. */
@@ -34,8 +36,9 @@ export function effectiveRes(
   manualRes: number,
   zoom: number,
   decade: number | null,
+  live = false,
 ): number {
-  const cap = resCap(decade);
+  const cap = resCap(decade, live);
   if (mode === "auto") return autoRes(zoom, cap);
   return Math.max(1, Math.min(cap, Math.round(manualRes)));
 }

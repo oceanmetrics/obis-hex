@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_STATE, formatHash, parseHash, type AppState } from "../src/lib/state/url";
-import { layerKey } from "../src/lib/data/layers";
+import { layerKey, layerLabel, manifestLayer, parseLayerKey } from "../src/lib/data/layers";
 
 describe("URL hash state", () => {
   it("round-trips every field", () => {
@@ -51,6 +51,25 @@ describe("URL hash state", () => {
   it("rounds the camera", () => {
     const h = formatHash({ ...DEFAULT_STATE, lon: 1.23456789, lat: -2.3456789, zoom: 3.14159 });
     expect(h).toContain("c=1.235,-2.346,3.14");
+  });
+});
+
+describe("aphia:<id> layer (live WoRMS subtree)", () => {
+  it("round-trips with a decade at res 7", () => {
+    const s: AppState = { ...DEFAULT_STATE, layer: layerKey({ kind: "aphia", id: 137092 }), decade: 1990, resMode: "manual", res: 7 };
+    const h = formatHash(s);
+    expect(h).toContain("l=aphia:137092&");
+    expect(parseHash(h)).toEqual(s);
+    expect(parseLayerKey("aphia:2688")).toEqual({ kind: "aphia", id: 2688 });
+  });
+  it("rejects ids that are not positive integers", () => {
+    for (const bad of ["aphia:", "aphia:0", "aphia:-5", "aphia:1.5", "aphia:12a", "aphia:1:2", "aphia:12345678901"])
+      expect(parseHash(`#l=${bad}`).layer, bad).toBe("all");
+  });
+  it("is not a release layer", () => {
+    expect(manifestLayer({ kind: "aphia", id: 2688 }, null)).toBeNull();
+    expect(manifestLayer({ kind: "aphia", id: 2688 }, 1990)).toBeNull();
+    expect(layerLabel({ kind: "aphia", id: 2688 })).toBe("AphiaID 2688");
   });
 });
 

@@ -1,4 +1,5 @@
-// what can be mapped: indicators, and the layer selection (all taxa, an EOV, a taxon group).
+// what can be mapped: indicators, and the layer selection (all taxa, an EOV, a taxon group from
+// the release, or any WoRMS AphiaID subtree served live by the h3t subtree endpoint).
 
 export type Indicator = "n" | "sp" | "shannon" | "simpson" | "es";
 
@@ -33,15 +34,19 @@ export const EOVS: { id: string; label: string }[] = [
 export type LayerSel =
   | { kind: "all" }
   | { kind: "eov"; eov: string }
-  | { kind: "taxon"; rank: string; taxon: string };
+  | { kind: "taxon"; rank: string; taxon: string }
+  /** children of a WoRMS AphiaID (any rank), from the live subtree endpoint, not the release */
+  | { kind: "aphia"; id: number };
 
 /** the release's manifest layers (files.parquet `layer`, stats.parquet `layer`). */
 export type ManifestLayer = "all" | "eov" | "taxon" | "decade_all" | "decade_eov";
 
-/** `all` · `eov:fish` · `taxon:class:Aves` — the layer's id in the URL (taxon percent-encoded). */
+/** `all` · `eov:fish` · `taxon:class:Aves` · `aphia:137092` — the layer's id in the URL (taxon
+ * percent-encoded). */
 export function layerKey(sel: LayerSel): string {
   if (sel.kind === "all") return "all";
   if (sel.kind === "eov") return `eov:${sel.eov}`;
+  if (sel.kind === "aphia") return `aphia:${sel.id}`;
   return `taxon:${encodeURIComponent(sel.rank)}:${encodeURIComponent(sel.taxon)}`;
 }
 
@@ -52,6 +57,8 @@ export function parseLayerKey(key: string | null | undefined): LayerSel | null {
   try {
     if (parts[0] === "eov" && parts.length === 2 && EOVS.some((e) => e.id === parts[1]))
       return { kind: "eov", eov: parts[1] };
+    if (parts[0] === "aphia" && parts.length === 2 && /^[1-9][0-9]{0,9}$/.test(parts[1]))
+      return { kind: "aphia", id: Number(parts[1]) };
     if (parts[0] === "taxon" && parts.length === 3 && parts[1] && parts[2])
       return {
         kind: "taxon",
@@ -65,8 +72,9 @@ export function parseLayerKey(key: string | null | undefined): LayerSel | null {
 }
 
 /** which manifest layer serves a selection and period; null when the release has no such layer
- * (taxon groups have no decade partitions). */
+ * (taxon groups have no decade partitions; AphiaID subtrees are never in the release). */
 export function manifestLayer(sel: LayerSel, decade: number | null): ManifestLayer | null {
+  if (sel.kind === "aphia") return null;
   if (decade === null) return sel.kind;
   if (sel.kind === "all") return "decade_all";
   if (sel.kind === "eov") return "decade_eov";
@@ -83,5 +91,6 @@ export function statsKey(sel: LayerSel): { key: string; rank: string } {
 export function layerLabel(sel: LayerSel): string {
   if (sel.kind === "all") return "All taxa";
   if (sel.kind === "eov") return `EOV: ${EOVS.find((e) => e.id === sel.eov)?.label ?? sel.eov}`;
+  if (sel.kind === "aphia") return `AphiaID ${sel.id}`;
   return `${sel.taxon} (${sel.rank})`;
 }

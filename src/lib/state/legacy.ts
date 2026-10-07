@@ -4,10 +4,11 @@
 //
 // The Shiny app bookmarks with `enableBookmarking = "url"`: `?_inputs_&name=<JSON>&…`, each value
 // a URL-encoded JSON literal (`indicator=%22es%22`, `years=%5B1990%2C1999%5D`,
-// `map_center=%7B%22lng%22%3A-80%2C%22lat%22%3A25%7D`). Unknown or unsupported inputs are ignored;
-// a view the static release cannot reproduce exactly (an AphiaID subtree, custom SQL, a family/
-// genus/species filter, a year range that is not a decade) maps to the closest layer and returns
-// a one-line notice saying so. Parsing never throws.
+// `map_center=%7B%22lng%22%3A-80%2C%22lat%22%3A25%7D`). Unknown or unsupported inputs are ignored.
+// "Children of a WoRMS AphiaID" maps exactly to the live `aphia:<id>` layer. A view the app cannot
+// reproduce exactly (custom SQL, a family/genus/species filter, a year range that is not a decade,
+// several AphiaIDs at once) maps to the closest layer and returns a one-line notice saying so.
+// Parsing never throws.
 import { layerKey, type Indicator, type LayerSel } from "../data/layers";
 import { DECADES, DEFAULT_STATE, type AppState } from "./url";
 import { RES_DECADE_MAX, RES_MAX } from "./resolution";
@@ -44,20 +45,6 @@ export const LEGACY_PRESETS: Record<string, { sel: LayerSel; note?: string }> = 
   Seabirds: { sel: { kind: "eov", eov: "seabirds" } },
   Seagrasses: { sel: { kind: "eov", eov: "seagrasses" } },
   "Sea turtles": { sel: { kind: "eov", eov: "seaTurtles" } },
-};
-
-/** "Children of a WoRMS AphiaID" values with a close layer (the app's own examples and presets). */
-export const LEGACY_APHIAIDS: Record<number, { sel: LayerSel; label: string }> = {
-  1836: { sel: taxon("class", "Aves"), label: "class Aves" },
-  10194: { sel: taxon("class", "Teleostei"), label: "class Teleostei" },
-  10193: { sel: taxon("class", "Elasmobranchii"), label: "class Elasmobranchii" },
-  1837: { sel: taxon("class", "Mammalia"), label: "class Mammalia" },
-  2688: { sel: { kind: "eov", eov: "marineMammals" }, label: "the marine mammals EOV" },
-  2689: { sel: taxon("order", "Testudines"), label: "order Testudines" },
-  1292: { sel: taxon("class", "Hexacorallia"), label: "class Hexacorallia" },
-  51: { sel: taxon("phylum", "Mollusca"), label: "phylum Mollusca" },
-  1071: { sel: taxon("class", "Malacostraca"), label: "class Malacostraca" },
-  148899: { sel: taxon("class", "Bacillariophyceae"), label: "class Bacillariophyceae" },
 };
 
 const INDICATOR_IDS: Indicator[] = ["es", "sp", "shannon", "simpson", "n"];
@@ -135,7 +122,13 @@ export function legacyToState(query: string): LegacyResult {
   const s: AppState = { ...DEFAULT_STATE };
   const notes: string[] = [];
   const label = (sel: LayerSel) =>
-    sel.kind === "all" ? "all taxa" : sel.kind === "eov" ? `the ${sel.eov} EOV` : `${sel.rank} ${sel.taxon}`;
+    sel.kind === "all"
+      ? "all taxa"
+      : sel.kind === "eov"
+        ? `the ${sel.eov} EOV`
+        : sel.kind === "aphia"
+          ? `AphiaID ${sel.id}`
+          : `${sel.rank} ${sel.taxon}`;
 
   // indicator ----
   const ind = str(q.get("indicator"));
@@ -159,14 +152,17 @@ export function legacyToState(query: string): LegacyResult {
       notes.length = 0;
     } else notes.push(`${rank || "this rank"} filters are not in the static release: showing ${label(sel)}`);
   } else if (q.get("custom_aphiaid") === true && aphia) {
-    const ids = aphia.split(/\s*,\s*/).map(Number).filter(Number.isInteger);
-    const hit = ids.length === 1 ? LEGACY_APHIAIDS[ids[0]] : undefined;
-    if (hit) sel = hit.sel;
-    notes.splice(
-      0,
-      notes.length,
-      `Children of AphiaID ${aphia} need a backend: showing ${hit ? hit.label : label(sel)}`,
-    );
+    // the Shiny app took a comma-separated list; the subtree endpoint takes one id
+    const ids = aphia
+      .split(/\s*,\s*/)
+      .filter((x) => /^[1-9][0-9]{0,9}$/.test(x))
+      .map(Number);
+    if (ids.length) {
+      sel = { kind: "aphia", id: ids[0] };
+      notes.length = 0;
+      if (ids.length > 1 || ids.length !== aphia.split(",").length)
+        notes.push(`AphiaIDs ${aphia}: showing the children of ${ids[0]} only`);
+    } else notes.push(`AphiaID "${aphia}" is not a number: showing ${label(sel)}`);
   }
   s.layer = layerKey(sel);
 
@@ -189,7 +185,7 @@ export function legacyToState(query: string): LegacyResult {
   // resolution (manual only; auto follows the zoom as before) ----
   const r = num(q.get("res"));
   if (q.get("res_manual") === true && Number.isInteger(r) && r >= 1) {
-    const cap = s.decade === null ? RES_MAX : RES_DECADE_MAX;
+    const cap = s.decade === null || sel.kind === "aphia" ? RES_MAX : RES_DECADE_MAX;
     s.resMode = "manual";
     s.res = Math.min(r, cap);
   }

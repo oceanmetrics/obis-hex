@@ -75,16 +75,26 @@ describe("legacy h3-db links", () => {
     expect(legacyToState(bookmark({ preset: "Fish", years: [1990, 1999] })).state.decade).toBe(1990);
   });
 
-  it("4. children of AphiaID 2688 (Cetacea) → the marine mammals EOV, with a notice", () => {
+  it("4. children of AphiaID 2688 (Cetacea) → the live aphia:2688 layer exactly, no notice", () => {
     const r = legacyToState(bookmark({ custom_aphiaid: true, aphiaid_val: "2688", map_zoom: 3 }));
-    expect(r.state.layer).toBe("eov:marineMammals");
-    expect(r.notice).toBe(
-      "Old h3-db link: Children of AphiaID 2688 need a backend: showing the marine mammals EOV.",
+    expect(r.state.layer).toBe("aphia:2688");
+    expect(r.notice).toBe("");
+    // decades and res 7 are allowed on the live layer (the endpoint filters by decade at any res)
+    const d = legacyToState(
+      bookmark({ custom_aphiaid: true, aphiaid_val: " 137092 ", years: [1990, 1999], res: 7, res_manual: true }),
     );
-    // an unknown id keeps the preset's layer
+    expect(d).toEqual({
+      state: expect.objectContaining({ layer: "aphia:137092", decade: 1990, resMode: "manual", res: 7 }),
+      notice: "",
+    });
+    expect(parseHash(formatHash(d.state))).toEqual(d.state);
+    // several ids: the first, with a notice; junk keeps the preset's layer, with a notice
     const u = legacyToState(bookmark({ custom_aphiaid: true, aphiaid_val: "123456, 7" }));
-    expect(u.state.layer).toBe("all");
-    expect(u.notice).toMatch(/AphiaID 123456, 7 need a backend: showing all taxa/);
+    expect(u.state.layer).toBe("aphia:123456");
+    expect(u.notice).toBe("Old h3-db link: AphiaIDs 123456, 7: showing the children of 123456 only.");
+    const j = legacyToState(bookmark({ custom_aphiaid: true, aphiaid_val: "whales", preset: "Fish" }));
+    expect(j.state.layer).toBe("eov:fish");
+    expect(j.notice).toBe('Old h3-db link: AphiaID "whales" is not a number: showing the fish EOV.');
   });
 
   it("5. custom SQL on idx_h3_eov → that EOV and indicator, with a notice", () => {
