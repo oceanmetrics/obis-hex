@@ -11,26 +11,61 @@ builds each cell from its H3 index.
 
 ## What it shows
 
-- **Indicator**: ES(50) (expected species per 50 records), species richness, Shannon H′,
-  Simpson Σp², number of records.
-- **Layer**: all taxa, one of the 7 Essential Ocean Variables (IOOS definitions, as in
-  `obisindicators::obis_eov_seeds()`), a taxon group (rank + taxon, from `taxon_groups.parquet`),
-  or **any taxon (WoRMS)**: the children of any WoRMS AphiaID, at any rank, computed live by the
-  h3t subtree service (see "Any taxon (WoRMS)" below; the one layer not in the static release).
-- **Period**: all years, or a decade 1960s–2020s (all taxa and EOVs at resolution ≤ 5; any
-  resolution for a WoRMS taxon).
-- **Resolution**: auto from zoom (the Shiny app's mapping, capped at 7, or 5 with a decade on a
-  release layer) or pinned manually.
-- **Projection**: flat (web mercator) or globe (MapLibre's globe; see "Globe" below).
-- Viridis ramp over p02–p98, from the release's `stats.parquet` for that view (default) or from the
-  loaded cells; fill opacity; dark or light CARTO basemap; hover tooltip; click for a cell panel;
-  a stats panel (cells, min, max, p02–p98); a copyable SQL panel; load time and file size in the
-  footer.
-- The URL hash holds the whole view (indicator, layer, period, resolution, opacity, theme, ramp
-  domain, projection, centre and zoom), so any link reproduces it. The title of the stats panel
-  spells the view out (indicator · layer · years and OBIS snapshot · H3 res), so a screenshot
-  explains itself.
-- Old links to the Shiny app open the same view here once Caddy redirects them (see "Legacy URLs").
+An MBON product built on the [`@marinebon/ui`](https://github.com/marinebon/ui) kit (v0.1.0): the map is
+the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-assessment.md`).
+
+- **Header**: the MBON wordmark, *OBIS hex* and its tagline, **Help ▾** (About; Data sources: the OBIS
+  snapshot, WoRMS, the IOOS Marine Life Data Network EOV definitions; Keyboard; "what defines each
+  EOV?"; guide and tour placeholders) and the theme toggle. The theme is the kit's (stored as
+  `mbon-theme`) and drives the CARTO basemap (dark-matter / positron); a link's `t=` still wins.
+- **The title sentence is the controls**, in the order dataset → place → method:
+  "**Seabirds** (EOV), **all years** (OBIS 2026-07-28), **worldwide**, **~12,400 km² hexagons** (res 3):
+  **ES(50)**". Each bold part is a chip whose popover holds the same control as its Controls tab.
+  The second line is the colour scale (viridis over p02–p98, the release's for the view or the loaded
+  hexagons') and the count, which for ES(50) is the coverage caveat: "9,196 of 26,361 hexagons have
+  ≥ 50 records". *Worldwide* means the whole layer is loaded (one file); *in view* means only the
+  parent partitions covering the map (or the live layer's bbox), and the count is for those.
+- **Controls** (top left, numbered): ① **Taxon**: one picker of All taxa, the 7 Essential Ocean
+  Variables (IOOS definitions, as in `obisindicators::obis_eov_seeds()`), the taxon groups by phylum,
+  class and order (from `taxon_groups.parquet`, most records first, record counts on a log bar, common
+  names for the groups people look for), and **Any taxon (WoRMS)**: the children of any WoRMS AphiaID,
+  computed live by the h3t subtree service (see below; the one layer not in the static release).
+  ② **Place & scale**: go to a sea or sanctuary, hexagon size (auto from zoom, the Shiny app's
+  mapping capped at 7, or 5 with a decade on a release layer; or pinned), the period, flat or globe.
+  ③ **Indicator**: ES(50), species richness, Shannon H′, Simpson Σp², records, each with a line of
+  meaning; *More options*: ramp domain (whole release / loaded hexagons), fill opacity, basemap labels.
+  ④ **Share**: Download PNG (the title, scale, release and link stamped on it), Copy link, Cite
+  (OBIS + obisindicators + release), and *SQL & timing* (the partition path, bytes, cells, ms,
+  partitions fetched/cached, the stats table and the copyable SQL or request URL).
+- **Time strip** (bottom): records per decade for the current layer (the sum of `n` over the res-1
+  decade files, one query per layer after the map has loaded, ~90–150 KB once); brushing a decade
+  selects it, a click returns to all years. Decades exist for all taxa and the EOVs at res ≤ 5, and
+  at any res for a WoRMS taxon; taxon groups say so instead.
+- **Cell** (right edge): a pill that lights when a hexagon is clicked; open it for all five indicators.
+  Hovering a hexagon shows them too.
+- **Footer** (kit): built by Ocean Metrics · OBIS snapshot · release · version · bytes · ms · source.
+- **Phone**: the panes become bottom sheets (Controls folded at first), the footer wraps.
+- The URL hash holds the whole view, so any link reproduces it (see "URL" below). Old links to the
+  Shiny app open the same view here once Caddy redirects them (see "Legacy URLs").
+
+## URL
+
+`#i=es&l=eov:fish&p=1990&r=auto&o=0.85&t=dark&d=release&g=flat&c=-20,5,1.4` — indicator, layer,
+period, resolution, opacity, theme, ramp domain, projection, centre and zoom: always written, in
+that order. 0.4.0 added layout keys, written only when not at their default and after the nine
+above, so every older link opens the same view and formats back to the same string (tested):
+
+| key | value | default |
+|---|---|---|
+| `k` | Controls tab: `taxon`, `place`, `indicator`, `share` | `taxon` |
+| `cc=1` | Controls folded to its pill | open (folded on a phone when the link does not say) |
+| `tc=1` | Time strip folded | open |
+| `x` | the selected hexagon (H3 index); lights the Cell pill | none |
+| `xo=1` | the Cell pane open | folded |
+| `b=0` | basemap labels off | on |
+
+No key was renamed, so no alias is needed; with no `t=` the theme is `?theme=`, then the stored kit
+choice, then dark (the old default).
 
 Not here: custom SQL, year ranges finer than decades, report export.
 
@@ -168,7 +203,11 @@ on SwiftShader, 1512×798) and writes `figures/figA_*.png`:
 |---|---|
 | `figA_app_alltaxa_globe_dark.png` | all taxa, ES(50), res 1, dark basemap, globe |
 | `figA_app_seagrasses_globe.png` | seagrasses EOV, ES(50), res 1, light basemap, globe |
-| `figA_app_seagrasses_caribbean.png` | seagrasses EOV, ES(50), res 4, the Caribbean, resolution control in the side panel |
+| `figA_app_seagrasses_caribbean.png` | seagrasses EOV, ES(50), res 4, the Caribbean, ② Place & scale open (`k=place`) |
+
+Since 0.4.0 each figure shows the MBON layout: the title sentence, the Controls pane, the Time strip
+and the footer; the script waits on `.shell[data-ready="1"]` (which now also waits for the ramp's
+release stats) and logs the sentence (`.view-title`).
 
 It opens the deployed app by default; `OBIS_HEX_URL=http://localhost:5173/obis-hex/ npm run figures`
 uses a local server. The URL states are in `scripts/figures.mjs`. Playwright is pinned to 1.63.0
@@ -186,6 +225,7 @@ npm test             # vitest
 npm run check        # svelte-check
 npm run build && npm run size-budget
 npm run figures      # paper figures (Playwright), see "Figures"
+node scripts/shoot.mjs   # the UI assessment states at phone/laptop/projector → docs/ui-assessment/after/
 ```
 
 A page URL can also point at another release with `?data=https://…/` (https or a same-origin path).
@@ -211,14 +251,19 @@ Measured at 0.3.0 (2026-10-08):
 
 | | gzip | budget |
 |---|---|---|
-| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB | 650 KB |
+| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.1 KB (0.4.0) | 650 KB |
 | runtime worker (MapLibre's) | 140.2 KB | 150 KB |
+| fonts and images (the kit's nine woff2 faces and the MBON wordmark; 0.4.0) | 538.1 KB raw | 600 KB |
 | DuckDB-WASM (lazy: JS chunk 45 KB, wasm ~7.8 MB) | not counted | must stay lazy |
 
 The atlas budget is 450 KB; deck.gl and h3-js add roughly 300 KB, hence 650 KB here. The viewport
 code (`polygonToCells`, `gridDisk`) uses the h3-js already in the bundle for deck.gl, so 0.2.0 (viewport loading,
 globe toggle, legacy links) added 4 KB and 0.3.0 (the WoRMS taxon search and subtree loader) another
-4 KB; the budget is unchanged.
+4 KB; the budget is unchanged. 0.4.0 (the MBON layout on `@marinebon/ui`) added 23.6 KB of JS and
+6.5 KB of CSS (gzip), within the 650 KB budget. The kit's self-hosted fonts and wordmark are in the
+static graph as assets; they are already compressed, never parsed as script and fetched per face on
+use, so they got their own 600 KB budget (`FONT_IMAGE_BUDGET_BYTES`) instead of a raise of the code
+budget.
 
 ## Deploy
 

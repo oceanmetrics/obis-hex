@@ -216,5 +216,56 @@ source · version.
 3. **Tests and figures.** `npm test`, `npm run check`, `npx tsc --noEmit` and the size budget green
    (≈ 90 tests: url, legacy, manifest, resolution, viewport, ramp, release, engine, h3t, size budget);
    `npm run figures` must still reproduce paper 2's three figures — it waits on
-   `.shell[data-ready="1"]` and reads `.stats .title`, so the new layout keeps a ready flag and a
+   `.shell[data-ready="1"]` and reads `.stats .title` (since 0.4.0: `.view-title`), so the new layout keeps a ready flag and a
    title element (or the script moves with it in the same change).
+
+## 7. After: v0.4.0, the MBON layout (2026-10-08)
+
+Built on `@marinebon/ui` v0.1.0 (branch `u3-brand`). Screenshots in `docs/ui-assessment/after/`,
+taken with `scripts/shoot.mjs` (this repo's copy of the capture script; same states, sizes and ready
+rule, `.view-title` instead of `.stats .title`) against a local `vite preview` of the build.
+
+| state | phone 390×844 | laptop 1280×800 | projector 1920×1080 |
+|---|---|---|---|
+| initial, dark | ![](ui-assessment/after/initial_dark_phone.png) | ![](ui-assessment/after/initial_dark_laptop.png) | ![](ui-assessment/after/initial_dark_projector.png) |
+| initial, light | ![](ui-assessment/after/initial_light_phone.png) | ![](ui-assessment/after/initial_light_laptop.png) | ![](ui-assessment/after/initial_light_projector.png) |
+| EOV seabirds, res 3, dark | ![](ui-assessment/after/eov-seabirds_res3_dark_phone.png) | ![](ui-assessment/after/eov-seabirds_res3_dark_laptop.png) | ![](ui-assessment/after/eov-seabirds_res3_dark_projector.png) |
+| EOV seabirds, res 3, light | ![](ui-assessment/after/eov-seabirds_res3_light_phone.png) | ![](ui-assessment/after/eov-seabirds_res3_light_laptop.png) | ![](ui-assessment/after/eov-seabirds_res3_light_projector.png) |
+| Aves, res 7, Monterey Bay, dark | ![](ui-assessment/after/aves_res7_monterey_dark_phone.png) | ![](ui-assessment/after/aves_res7_monterey_dark_laptop.png) | ![](ui-assessment/after/aves_res7_monterey_dark_projector.png) |
+| Aves, res 7, Monterey Bay, light | ![](ui-assessment/after/aves_res7_monterey_light_phone.png) | ![](ui-assessment/after/aves_res7_monterey_light_laptop.png) | ![](ui-assessment/after/aves_res7_monterey_light_projector.png) |
+| EOV seabirds, res 2, globe, dark | ![](ui-assessment/after/eov-seabirds_globe_dark_phone.png) | ![](ui-assessment/after/eov-seabirds_globe_dark_laptop.png) | ![](ui-assessment/after/eov-seabirds_globe_dark_projector.png) |
+| EOV seabirds, res 2, globe, light | ![](ui-assessment/after/eov-seabirds_globe_light_phone.png) | ![](ui-assessment/after/eov-seabirds_globe_light_laptop.png) | ![](ui-assessment/after/eov-seabirds_globe_light_projector.png) |
+
+Two more: the taxon chip open (`after/chip-taxon_light_laptop.png`) and ④ Share with *SQL & timing*
+open (`after/share-tab_light_laptop.png`).
+
+**Anatomy.** Header (MBON wordmark, OBIS hex + tagline, Help ▾, theme) → the title sentence band →
+the map, with Controls (① Taxon ② Place & scale ③ Indicator ④ Share) floating top left, zoom and
+globe/flat top right, the Cell pill on the right edge, the Time strip (records per decade) along the
+bottom → the kit footer.
+
+**The sentence as rendered** (laptop, seabirds res 3): "**Seabirds** (EOV), **all years** (OBIS
+2026-07-28), **worldwide**, **~12,400 km² hexagons** (res 3): **ES(50)**", then the scale and
+"9,196 of 26,361 hexagons have ≥ 50 records". At Monterey Bay: "**Birds** (class Aves), **all
+years** (OBIS 2026-07-28), **in view** (1 of 122 partitions), **~5 km² hexagons** (res 7): **ES(50)**"
+and "3,938 of 53,268 hexagons have ≥ 50 records".
+
+**Cut list, as done.** Sidebar and subtitle gone (About in Help ▾). Layer kind, EOV, taxon list and
+WoRMS search → one picker in ① and the taxon chip. Indicator → ③ and its chip. Period → the period
+chip, ② and the Time strip. Resolution → the hexagon-size chip and ②. Opacity, ramp domain, basemap
+labels → ③ *More options*. Projection → a map button and ②. Basemap/theme → the header toggle (the
+assessment's "system" option is the kit's: with no stored choice the kit follows the system, but
+obis-hex keeps dark as its no-choice default so old links look as they did). SQL → ④ *SQL & timing*.
+Stats card → the coverage count in the sentence and the full table in ④. Footer engine items → ④;
+the footer is the kit's one line. Legacy notice → a kit Notice (dismissable). Not done from §5:
+the distribution histogram in the right-edge pane (the Cell pane shows the cell and the view median),
+downloads of cells (CSV/Parquet/zip, `reproduce.R`), *Copy code* in R/Python, the guide and tour (Help
+lists them as coming), feedback, named-region filtering (the "go to" list only moves the map).
+
+**Must-not-regress, checked.** URL: the nine keys unchanged; new layout keys only when not default;
+old links (the figures, these states) format back to the same string (tests); `?legacy=` lands
+with its notice. Bytes per view (network-measured): all taxa res 1 = 25.0 KB; seabirds res 3 =
+391.3 KB; Aves res 7 Monterey = 1 of 122 partitions, 602.2 KB; seabirds res 2 = 103.4 KB, the same
+as before. The Time strip adds one query per layer after the map loads (seabirds 90 KB, all taxa
+153 KB: DuckDB reads the small res-1 decade files whole). Tests 102 → 126; size budget 601.6 →
+631.1 KB gzip (650 KB) plus a separate fonts/images budget; `npm run figures` re-run.

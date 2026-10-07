@@ -24,6 +24,15 @@ Conventions for anyone (human or agent) changing obis-hex.
   every downstream panel treats it like a partition. Never call the service without a bbox at
   res >= 6, keep the request URL's parameter order fixed (it is the cache key, in DuckDB and
   in Varnish), and handle 413 by stepping down a resolution, not by retrying.
+- **The UI is `@marinebon/ui`** (pinned `github:marinebon/ui#v0.1.0`; read its AGENTS.md before adding a
+  control). Use its components and semantic tokens (`--bg-surface`, `--text-body`, …), never a new hex
+  value; the pipeline order is taxon (dataset) → place → indicator (method) → share (delivery). A
+  control that changes what the map means goes in its Controls tab AND in the title sentence as a
+  Chip showing the same component; its state goes in `AppState`. A widget two apps need belongs in
+  the kit, not here.
+- **The title sentence is the view's caption.** `sentenceParts()`/`sentenceText()`
+  (`src/lib/view/sentence.ts`) build it; the PNG stamp and `npm run figures` read it. Keep the ES(50)
+  coverage line ("n of N hexagons have ≥ 50 records") visible whenever the indicator is ES(50).
 - **Logic in plain `.ts`, tested.** Components only wire. Every rule (resolution mapping, ramp domain,
   manifest lookup, hash codec) has a vitest test with a small fixture; a bug fix adds a named
   regression test. `npm test`, `npm run check`, `npx tsc --noEmit` and the size budget must be green.
@@ -32,8 +41,14 @@ Conventions for anyone (human or agent) changing obis-hex.
 
 | path | what |
 |---|---|
-| `src/App.svelte` | the shell: `st` (AppState), derived view, loading effects, map wiring |
-| `src/components/` | Controls, StatsPanel, CellPanel, SqlPanel |
+| `src/App.svelte` | the shell: `st` (AppState), derived view, loading effects, map wiring; Header, title sentence, Controls, Cell pane, Time strip, Footer |
+| `src/components/` | TitleSentence (chips), TaxonPanel, PeriodPicker, PlacePanel, ScalePanel, IndicatorPanel, SharePanel, SqlPanel, CellPanel, DecadeBars, AphiaSearch |
+| `src/lib/view/sentence.ts` | the title sentence parts and text, hexagon areas, the coverage line |
+| `src/lib/data/taxa.ts` | the taxon picker rows (groups, counts, common names, log bars) |
+| `src/lib/release/decades.ts` | records per decade (sum of `n` of the res-1 decade files), brush ⇄ decade |
+| `src/lib/view/regions.ts` | the "go to" regions |
+| `src/lib/export/` | the title-stamped PNG, the Cite text |
+| `scripts/shoot.mjs` | the UI assessment capture → `docs/ui-assessment/after/` |
 | `src/lib/state/url.ts` | AppState, hash codec, defaults |
 | `src/lib/state/resolution.ts` | zoom → res (Shiny app's breaks), caps 7 / 5 with a decade |
 | `src/lib/state/legacy.ts` | Shiny h3-db bookmark (`?legacy=`) → AppState + notice; Caddy side in `docs/redirect.md` |
@@ -60,7 +75,8 @@ Conventions for anyone (human or agent) changing obis-hex.
    and `statsKey` (`src/lib/data/layers.ts`).
 3. If its partition keys differ, extend `Manifest.view` (`src/lib/release/manifest.ts`). Split
    resolutions need nothing extra: `p=<parent>` partitions are grouped automatically.
-4. Offer it in `Controls.svelte`, disabled when `manifest.hasLayer(...)` is false.
+4. Offer it in the taxon picker (`taxonItems()` in `src/lib/data/taxa.ts`), disabled when
+   `manifest.hasLayer(...)` is false; give `taxonPart()` (`sentence.ts`) its words.
 5. If the Shiny app had it, map its `preset=` value in `LEGACY_PRESETS` (`legacy.ts`) and add the
    row to `docs/redirect.md`.
 6. Tests: a manifest lookup case, a URL round-trip, and an engine case if a fixture exists.
