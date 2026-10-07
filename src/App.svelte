@@ -110,6 +110,7 @@
   let helpOpen = $state(false);
   let helpTopic = $state<"about" | "sources" | "keys">("about");
   let wide = $state(matchMedia("(min-width: 1600px)").matches);
+  let wideEnough = $state(!matchMedia("(max-width: 640px)").matches);
   let legacyNotice = $state(fromLegacy?.notice ?? "");
   let health = $state<"probing" | "ok" | "down">("probing");
   let healthError = $state("");
@@ -343,6 +344,11 @@
   });
   $effect(() => {
     handle?.setLabels(st.labels);
+  });
+  // keep the map's centre above the Time strip (laptop and wider; on a phone the panes are sheets)
+  $effect(() => {
+    const bottom = wideEnough ? (st.timeFolded ? 56 : stripH + 64) : 0;
+    handle?.map.setPadding({ top: 0, left: 0, right: 0, bottom });
   });
 
 
@@ -585,8 +591,13 @@
       if (t !== st.theme) st.theme = t;
     });
     const mq = matchMedia("(min-width: 1600px)");
-    const onMq = () => (wide = mq.matches);
+    const mqPhone = matchMedia("(max-width: 640px)");
+    const onMq = () => {
+      wide = mq.matches;
+      wideEnough = !mqPhone.matches;
+    };
     mq.addEventListener("change", onMq);
+    mqPhone.addEventListener("change", onMq);
     probeH3t(h3tBase).then((ok) => (h3tHealth = ok ? "ok" : "down"));
 
     (async () => {
@@ -610,6 +621,7 @@
       window.removeEventListener("hashchange", onHashChange);
       offTheme();
       mq.removeEventListener("change", onMq);
+      mqPhone.removeEventListener("change", onMq);
       handle?.destroy();
       engine.dispose();
     };
