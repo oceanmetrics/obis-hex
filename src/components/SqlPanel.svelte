@@ -1,6 +1,7 @@
 <script lang="ts">
   // the query behind the view, copyable (runs as-is in DuckDB CLI/R/Python against the same URL).
   // For a live AphiaID layer it is the subtree request URL instead (`isUrl`).
+  import { Button } from "@marinebon/ui";
   let { sql, statsQuery, isUrl = false }: { sql: string; statsQuery: string; isUrl?: boolean } = $props();
   let copied = $state(false);
 
@@ -15,13 +16,13 @@
   }
 </script>
 
-<details class="sql">
-  <summary>{isUrl ? "Request" : "SQL"}</summary>
+<div class="sql">
+  <span class="mbon-label">{isUrl ? "request" : "SQL"}</span>
   {#if sql}
     <pre><code>{sql}</code></pre>
-    <button onclick={copy}>{copied ? "copied" : "copy"}</button>
+    <Button variant="quiet" size="sm" onclick={copy}>{copied ? "copied" : "copy"}</Button>
     {#if isUrl}
-      <p class="dim">Parquet from the h3t subtree service (h3, cell_id, n, sp, shannon, simpson, es);
+      <p class="hint">Parquet from the h3t subtree service (h3, cell_id, n, sp, shannon, simpson, es);
         add <code>&amp;format=json</code> for JSON.</p>
     {:else if statsQuery}
       <details>
@@ -30,6 +31,6 @@
       </details>
     {/if}
   {:else}
-    <p class="dim">no partition loaded</p>
+    <p class="hint">no partition loaded</p>
   {/if}
-</details>
+</div>

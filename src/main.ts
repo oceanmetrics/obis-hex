@@ -1,3 +1,4 @@
+import "@marinebon/ui/styles.css"; // MBON fonts + tokens + base
 import { mount } from "svelte";
 import App from "./App.svelte";
 import "./app.css";

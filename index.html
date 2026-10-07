@@ -7,7 +7,17 @@
       name="description"
       content="OBIS biodiversity indicators on H3 hexagons, computed from Parquet in the browser"
     />
-    <title>OBIS hex — biodiversity indicators on H3 hexagons</title>
+    <title>OBIS hex — biodiversity indicators on H3 hexagons · MBON</title>
+    <script>
+      // the theme before first paint: a link's t= wins, then ?theme=, then the stored MBON
+      // choice, else the app's dark default (the same order as App.svelte)
+      (function () {
+        var t = (location.hash.match(/[#&]t=(dark|light)\b/) || [])[1];
+        var q = new URLSearchParams(location.search).get("theme"), s = null;
+        try { s = localStorage.getItem("mbon-theme"); } catch (e) {}
+        document.documentElement.dataset.theme = t || (q === "dark" || q === "light" ? q : s === "dark" || s === "light" ? s : "dark");
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>
