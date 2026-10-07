@@ -5,7 +5,14 @@
 //
 // Dependency-injectable: `createDb` defaults to the browser boot (bundles.ts, reached only through
 // a dynamic import so DuckDB stays off the critical path); tests pass a Node DuckDB-WASM instead.
-import { cacheInsertSql, partitionSql, unionSql, VALUE_COLUMNS, CACHE_TABLE_SQL } from "./sql";
+import {
+  bufferInsertSql,
+  cacheInsertSql,
+  partitionSql,
+  unionSql,
+  VALUE_COLUMNS,
+  CACHE_TABLE_SQL,
+} from "./sql";
 import { lit } from "./sql";
 import type { Indicator } from "../data/layers";
 
@@ -20,6 +27,9 @@ export interface ArrowTableLike {
 }
 export interface DbLike {
   query(sql: string): Promise<ArrowTableLike> | ArrowTableLike;
+  /** register bytes as a file DuckDB can read_parquet() by `name` (a fetched response) */
+  registerBuffer(name: string, bytes: Uint8Array): Promise<void> | void;
+  dropFile(name: string): Promise<void> | void;
   close(): Promise<void>;
 }
 
@@ -63,6 +73,9 @@ export class Engine {
   #parts = new Map<string, number>();
   #useClock = 0;
   #cacheTable: Promise<unknown> | null = null;
+  /** remote responses being inserted into part_cache, by URL (so concurrent loads fetch once) */
+  #pending = new Map<string, Promise<void>>();
+  #bufSeq = 0;
   /** max parent partitions kept in DuckDB before the least recently used are deleted */
   maxCachedParts = 512;
 
@@ -142,11 +155,7 @@ export class Engine {
   async loadUnion(urls: string[]): Promise<Partition & { fetched: string[] }> {
     const sorted = [...new Set(urls)].sort();
     const t0 = now();
-    this.#cacheTable ??= this.query(CACHE_TABLE_SQL).catch((err) => {
-      this.#cacheTable = null;
-      throw err;
-    });
-    await this.#cacheTable;
+    await this.#ensureCacheTable();
     const missing = sorted.filter((u) => !this.#parts.has(u));
     if (missing.length) {
       await this.query(cacheInsertSql(missing));
@@ -158,6 +167,61 @@ export class Engine {
     const sql = unionSql(sorted);
     const t = await this.query(sql);
     return { ...toPartition(`union:${sorted.join("|")}`, sql, t, now() - t0), fetched: missing };
+  }
+
+  /**
+   * Load one response fetched by the caller (the live AphiaID subtree endpoint) into part_cache,
+   * keyed by its request URL, and return it as a Partition. `fetchBytes` runs only when the URL is
+   * not cached; its errors propagate unchanged. Shares part_cache and its LRU with loadUnion().
+   */
+  async loadRemote(
+    url: string,
+    fetchBytes: () => Promise<Uint8Array>,
+  ): Promise<Partition & { fetched: boolean }> {
+    const t0 = now();
+    await this.#ensureCacheTable();
+    let fetched = false;
+    if (!this.#parts.has(url)) {
+      let job = this.#pending.get(url);
+      if (!job) {
+        fetched = true;
+        job = (async () => {
+          const bytes = await fetchBytes();
+          const name = `remote_${++this.#bufSeq}.parquet`;
+          await this.#enqueue(async () => {
+            const db = await this.boot();
+            try {
+              await db.registerBuffer(name, bytes);
+              await db.query(bufferInsertSql(url, name));
+            } catch (err) {
+              throw new EngineError("reading the response failed", err);
+            } finally {
+              await Promise.resolve(db.dropFile(name)).catch(() => {});
+            }
+          });
+          this.#parts.set(url, 0);
+        })();
+        this.#pending.set(url, job);
+        job.then(
+          () => this.#pending.delete(url),
+          () => this.#pending.delete(url),
+        );
+      }
+      await job;
+    }
+    this.#parts.set(url, ++this.#useClock);
+    await this.#evict(new Set([url]));
+    const sql = unionSql([url]);
+    const t = await this.query(sql);
+    return { ...toPartition(url, sql, t, now() - t0), fetched };
+  }
+
+  #ensureCacheTable(): Promise<unknown> {
+    this.#cacheTable ??= this.query(CACHE_TABLE_SQL).catch((err) => {
+      this.#cacheTable = null;
+      throw err;
+    });
+    return this.#cacheTable;
   }
 
   async #evict(keep: Set<string>): Promise<void> {
@@ -179,6 +243,7 @@ export class Engine {
     this.#db = null;
     this.#cache.clear();
     this.#parts.clear();
+    this.#pending.clear();
     this.#cacheTable = null;
   }
 

@@ -27,6 +27,10 @@ export async function createBrowserDb(): Promise<DbLike> {
   const conn = await db.connect();
   return {
     query: (sql: string) => conn.query(sql),
+    registerBuffer: (name: string, bytes: Uint8Array) => db.registerFileBuffer(name, bytes),
+    dropFile: async (name: string) => {
+      await db.dropFile(name);
+    },
     close: async () => {
       await conn.close();
       await db.terminate();

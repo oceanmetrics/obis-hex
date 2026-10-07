@@ -50,6 +50,17 @@ ${valueCols()}
 FROM read_parquet([${urls.map(lit).join(", ")}], hive_partitioning = false, filename = true)`;
 }
 
+/** insert one fetched response (registered with DuckDB as file `name`) into part_cache under its
+ * request URL. */
+export function bufferInsertSql(url: string, name: string): string {
+  return `INSERT INTO part_cache
+SELECT
+  ${lit(url)} AS url,
+  h3,
+${valueCols()}
+FROM read_parquet(${lit(name)}, hive_partitioning = false)`;
+}
+
 /** the union of the cached parent partitions a view needs. */
 export function unionSql(urls: string[]): string {
   return `SELECT h3, ${VALUE_COLUMNS.join(", ")}

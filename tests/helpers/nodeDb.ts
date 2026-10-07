@@ -21,6 +21,8 @@ export async function createNodeDb(): Promise<DbLike> {
   const conn = db.connect();
   return {
     query: (sql: string) => conn.query(sql) as ArrowTableLike,
+    registerBuffer: (name: string, bytes: Uint8Array) => db.registerFileBuffer(name, bytes),
+    dropFile: (name: string) => db.dropFile(name),
     close: async () => {
       conn.close();
     },
