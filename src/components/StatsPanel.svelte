@@ -6,6 +6,7 @@
 
   let {
     title,
+    link = null,
     domain,
     domainSource,
     vstats,
@@ -14,6 +15,8 @@
     message,
   }: {
     title: string;
+    /** an external link after the title (the WoRMS page of a live AphiaID layer) */
+    link?: { href: string; text: string } | null;
     domain: Domain | null;
     domainSource: string;
     vstats: ViewStats | null;
@@ -26,7 +29,7 @@
 </script>
 
 <section class="panel stats" aria-live="polite">
-  <div class="title">{title}{#if loading}<span class="spin" aria-label="loading"></span>{/if}</div>
+  <div class="title">{title}{#if link}&nbsp;<a href={link.href} target="_blank" rel="noopener">{link.text}</a>{/if}{#if loading}<span class="spin" aria-label="loading"></span>{/if}</div>
   {#if message}<div class="msg">{message}</div>{/if}
   {#if domain}
     <div class="ramp" style:background={gradient}></div>

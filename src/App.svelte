@@ -1,7 +1,7 @@
 <script lang="ts">
   // the app shell. ALL view state is `st` (an AppState), mirrored to the URL hash both ways;
   // everything else here is derived from it or is loaded data (release, manifest, partition).
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import type { PickingInfo } from "@deck.gl/core";
   import { Engine, type Partition } from "./lib/engine/engine";
   import { displaySql, displayUnionSql } from "./lib/engine/sql";
@@ -31,12 +31,26 @@
   import { createMap, type MapHandle } from "./lib/map/map";
   import { cellColors, hexLayer } from "./lib/map/hexLayer";
   import { fmt, fmtBytes } from "./lib/format";
+  import {
+    errorLine,
+    loadAphiaView,
+    parseTaxonInfo,
+    probeH3t,
+    resolveH3tBase,
+    subtreeBbox,
+    taxonUrl,
+    wormsUrl,
+    BBOX_MIN_RES,
+    type AphiaView,
+    type TaxonInfo,
+  } from "./lib/aphia/h3t";
   import Controls from "./components/Controls.svelte";
   import StatsPanel from "./components/StatsPanel.svelte";
   import CellPanel, { type SelectedCell } from "./components/CellPanel.svelte";
   import SqlPanel from "./components/SqlPanel.svelte";
 
   const base = resolveDataBase(location.search, import.meta.env.VITE_DATA_BASE, location.href);
+  const h3tBase = resolveH3tBase(location.search, import.meta.env.VITE_H3T_BASE, location.href);
   const engine = new Engine();
 
   // an old h3-db link (Caddy 302s /h3-db/?<query> to ?legacy=<query>): map it to the hash state
@@ -64,34 +78,75 @@
   let releaseStats = $state.raw<StatsRow | null>(null);
   let statsQuery = $state("");
   let selected = $state.raw<SelectedCell | null>(null);
+  // the live AphiaID layer (h3t subtree service) ----
+  let h3tHealth = $state<"probing" | "ok" | "down">("probing");
+  let aphiaView = $state.raw<AphiaView | null>(null);
+  let aphiaInfo = $state.raw<TaxonInfo | null>(null);
+  let aphiaAccepted = $state.raw<TaxonInfo | null>(null);
   let mapEl: HTMLDivElement;
   let handle = $state.raw<MapHandle | null>(null);
 
   // derived view ----
   const sel: LayerSel = $derived(parseLayerKey(st.layer) ?? { kind: "all" });
-  const reqRes = $derived(effectiveRes(st.resMode, st.res, st.zoom, st.decade));
+  const live = $derived(sel.kind === "aphia");
+  const reqRes = $derived(effectiveRes(st.resMode, st.res, st.zoom, st.decade, live));
   // the view plan: a whole file, or the parent partitions covering the viewport (layout v2), with
   // a fallback to a coarser res when a split res would need more than MAX_PARENTS partitions
-  const plan = $derived(meta ? planView(meta.manifest, sel, st.decade, reqRes, bounds) : null);
-  const res = $derived(plan?.res ?? reqRes);
+  const plan = $derived(meta && !live ? planView(meta.manifest, sel, st.decade, reqRes, bounds) : null);
+  const res = $derived(live ? (aphiaView?.res ?? reqRes) : (plan?.res ?? reqRes));
   const urls = $derived(plan ? plan.files.map((f) => fileUrl(base, f)) : []);
+  // the live layer's request: one per (id, res, decade), plus the rounded viewport bbox from res 6
+  const aphiaKey = $derived.by(() => {
+    if (sel.kind !== "aphia" || h3tHealth === "down") return "";
+    const bb = reqRes >= BBOX_MIN_RES && bounds ? subtreeBbox(bounds) : null;
+    if (reqRes >= BBOX_MIN_RES && !bb) return ""; // wait for the map's bounds
+    return [sel.id, reqRes, st.decade ?? "", bb ? bb.join(",") : ""].join("|");
+  });
   // a string, so the load effect re-runs only when the set of files changes (not on every pan)
-  const loadKey = $derived(urls.length ? `${plan?.split ? "split" : "whole"}\n${urls.join("\n")}` : "");
+  const loadKey = $derived(
+    live
+      ? aphiaKey
+        ? `aphia\n${aphiaKey}`
+        : ""
+      : urls.length
+        ? `${plan?.split ? "split" : "whole"}\n${urls.join("\n")}`
+        : "",
+  );
   const fileRow = $derived(plan && !plan.split ? plan.files[0] : null);
   const planBytes = $derived(plan ? plan.files.reduce((a, f) => a + f.bytes, 0) : 0);
   const vstats = $derived(partition ? viewStats(partition.values[st.indicator]) : null);
   const domain = $derived(chooseDomain(st.domain, domainFromStats(releaseStats), vstats));
   const colors = $derived(partition ? cellColors(partition.values[st.indicator], domain) : null);
   const sqlText = $derived(
-    !plan ? "" : plan.split ? displayUnionSql(urls, st.indicator) : displaySql(urls[0], st.indicator),
+    live
+      ? (aphiaView?.url ?? "")
+      : !plan
+        ? ""
+        : plan.split
+          ? displayUnionSql(urls, st.indicator)
+          : displaySql(urls[0], st.indicator),
   );
+  /** the layer in words: the WoRMS name and rank for a live AphiaID layer */
+  const layerText = $derived.by(() => {
+    if (sel.kind !== "aphia" || !aphiaInfo || aphiaInfo.id !== sel.id) return layerLabel(sel);
+    const acc =
+      aphiaAccepted && aphiaAccepted.id !== aphiaInfo.id ? ` → ${aphiaAccepted.scientificName}` : "";
+    return `${aphiaInfo.scientificName}${acc} (${aphiaInfo.rank.toLowerCase()})`;
+  });
   // the view described in words, so a screenshot explains itself
   const viewTitle = $derived(
-    `${indicatorLabel(st.indicator)} · ${layerLabel(sel)} · ` +
+    `${indicatorLabel(st.indicator)} · ${layerText} · ` +
       `${st.decade === null ? "all years" : `${st.decade}–${st.decade + 9}`}` +
       `${release?.obis_snapshot ? ` (OBIS ${release.obis_snapshot})` : ""} · H3 res ${res}`,
   );
   const noDataReason = $derived.by(() => {
+    if (live) {
+      if (h3tHealth === "down")
+        return "The WoRMS subtree service (h3t) is unavailable: choose another layer.";
+      if (partition && !loading && partition.rows === 0)
+        return `No OBIS records for this taxon${st.decade === null ? "" : ` in the ${st.decade}s`}${res >= BBOX_MIN_RES ? " in this view" : ""}.`;
+      return "";
+    }
     if (!meta) return "";
     if (plan) return plan.split && !plan.files.length ? "No cells in this view." : "";
     if (sel.kind === "taxon" && st.decade !== null)
@@ -124,6 +179,31 @@
     let cancelled = false;
     loading = true;
     loadError = "";
+    if (mode === "aphia") {
+      const [id, r, d] = list[0].split("|");
+      loadAphiaView(engine, h3tBase, {
+        aphiaid: Number(id),
+        res: Number(r),
+        decade: d ? Number(d) : null,
+        bounds: untrack(() => bounds),
+      })
+        .then((v) => {
+          if (cancelled) return;
+          aphiaView = v;
+          partition = v.partition;
+          loading = false;
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          loading = false;
+          loadError = errorLine(err);
+          aphiaView = null;
+          partition = null;
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
     const job =
       mode === "split"
         ? engine.loadUnion(list).then((p) => {
@@ -172,6 +252,29 @@
     };
   });
 
+  // the selected AphiaID's name and rank (and its accepted name when it is a synonym) ----
+  $effect(() => {
+    if (sel.kind !== "aphia" || h3tHealth === "down") return;
+    const id = sel.id;
+    if (aphiaInfo?.id === id) return;
+    const ctl = new AbortController();
+    const get = async (x: number) => {
+      const r = await fetch(taxonUrl(h3tBase, x), { signal: ctl.signal });
+      return r.ok ? parseTaxonInfo(await r.json()) : null;
+    };
+    (async () => {
+      try {
+        const info = await get(id);
+        const acc = info && info.accepted_id !== info.id ? await get(info.accepted_id) : null;
+        aphiaInfo = info;
+        aphiaAccepted = acc;
+      } catch {
+        /* the title falls back to "AphiaID <id>" */
+      }
+    })();
+    return () => ctl.abort();
+  });
+
   // push layers / theme to the map ----
   $effect(() => {
     if (!handle) return;
@@ -199,7 +302,7 @@
       url: p.url,
       h3: p.h3[i],
       res,
-      layer: layerLabel(sel),
+      layer: layerText,
       period: st.decade === null ? "All years" : `${st.decade}s`,
       values: Object.fromEntries(INDICATORS.map((ind) => [ind.id, p.values[ind.id][i]])) as SelectedCell["values"],
     };
@@ -234,6 +337,7 @@
     });
     bounds = handle.bounds();
     window.addEventListener("hashchange", onHashChange);
+    probeH3t(h3tBase).then((ok) => (h3tHealth = ok ? "ok" : "down"));
 
     (async () => {
       const probe = await probeRelease(base);
@@ -260,7 +364,7 @@
   });
 </script>
 
-<div class="shell" data-ready={partition && !loading && health === "ok" ? "1" : "0"}>
+<div class="shell" data-ready={partition && !loading && (health === "ok" || live) ? "1" : "0"}>
   <aside class="side">
     <header>
       <h1>OBIS hex</h1>
@@ -279,12 +383,16 @@
     {/if}
     <Controls
       bind:st
-      autoRes={Math.min(zoomToRes(st.zoom), st.decade === null ? 7 : 5)}
+      autoRes={Math.min(zoomToRes(st.zoom), st.decade === null || live ? 7 : 5)}
       {res}
       manifest={meta?.manifest ?? null}
       taxonGroups={meta?.taxonGroups ?? []}
+      {h3tBase}
+      {h3tHealth}
+      {aphiaInfo}
+      {aphiaAccepted}
     />
-    <SqlPanel sql={sqlText} {statsQuery} />
+    <SqlPanel sql={sqlText} statsQuery={live ? "" : statsQuery} isUrl={live} />
   </aside>
 
   <main class="stage">
@@ -292,19 +400,31 @@
     <div class="overlay-top">
       <StatsPanel
         title={viewTitle}
+        link={sel.kind === "aphia" ? { href: wormsUrl(sel.id), text: "▸ in WoRMS" } : null}
         {domain}
-        domainSource={st.domain === "release" && releaseStats ? "release p02–p98" : "view p02–p98"}
+        domainSource={st.domain === "release" && releaseStats && !live ? "release p02–p98" : "view p02–p98"}
         {vstats}
         {releaseStats}
         {loading}
-        message={loadError || noDataReason || plan?.notice || (health === "probing" ? "Loading release…" : "")}
+        message={loadError ||
+          noDataReason ||
+          (live ? aphiaView?.notice : plan?.notice) ||
+          (live && h3tHealth === "probing" ? "Checking the WoRMS subtree service…" : "") ||
+          (!live && health === "probing" ? "Loading release…" : "")}
       />
     </div>
     {#if selected}
       <CellPanel cell={selected} indicator={st.indicator} onclose={() => (selected = null)} />
     {/if}
     <footer class="foot">
-      {#if partition && plan?.split}
+      {#if live && partition && aphiaView}
+        <span title={aphiaView.url}>h3t subtree aphiaid={sel.kind === "aphia" ? sel.id : ""} res {aphiaView.res}{st.decade === null ? "" : ` ${st.decade}s`}{aphiaView.url.includes("bbox=") ? " (view bbox)" : ""}</span>
+        <span>{fmtBytes(aphiaView.meta.bytes)}</span>
+        <span>{fmt(aphiaView.meta.rows ?? partition.rows)} rows</span>
+        <span title="X-Query-Ms: the server's query time">server {aphiaView.meta.queryMs === null ? "—" : `${fmt(aphiaView.meta.queryMs)} ms`}</span>
+        <span>{aphiaView.fetched ? `${fmt(Math.round(aphiaView.meta.fetchMs))} ms round trip` : "cached"}</span>
+        <span>{Math.round(partition.ms)} ms</span>
+      {:else if partition && plan?.split}
         <span title={plan.files.map((f) => f.path).join("\n")}
           >{plan.files.length} of {fmt(plan.parentsTotal)} partitions (res {res} by parent cell)</span>
         <span>{fmtBytes(planBytes)}</span>

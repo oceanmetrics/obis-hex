@@ -6,6 +6,8 @@
   import type { AppState } from "../lib/state/url";
   import { DECADES } from "../lib/state/url";
   import { RES_DECADE_MAX, RES_MAX } from "../lib/state/resolution";
+  import { wormsUrl, type TaxonInfo } from "../lib/aphia/h3t";
+  import AphiaSearch from "./AphiaSearch.svelte";
 
   let {
     st = $bindable(),
@@ -13,24 +15,53 @@
     res,
     manifest,
     taxonGroups,
+    h3tBase,
+    h3tHealth,
+    aphiaInfo,
+    aphiaAccepted,
   }: {
     st: AppState;
     autoRes: number;
     res: number;
     manifest: Manifest | null;
     taxonGroups: TaxonGroup[];
+    /** the h3t subtree service (live AphiaID layers) */
+    h3tBase: string;
+    h3tHealth: "probing" | "ok" | "down";
+    /** the selected AphiaID's details, and its accepted name when it is a synonym */
+    aphiaInfo: TaxonInfo | null;
+    aphiaAccepted: TaxonInfo | null;
   } = $props();
 
   const sel: LayerSel = $derived(parseLayerKey(st.layer) ?? { kind: "all" });
   const hasEov = $derived(manifest?.hasLayer("eov") ?? false);
   const hasTaxon = $derived((manifest?.hasLayer("taxon") ?? false) && taxonGroups.length > 0);
+  const live = $derived(sel.kind === "aphia");
+  const hasAphia = $derived(h3tHealth !== "down");
   const hasDecade = $derived(
-    manifest ? manifest.hasLayer(sel.kind === "eov" ? "decade_eov" : "decade_all") : false,
+    live || (manifest ? manifest.hasLayer(sel.kind === "eov" ? "decade_eov" : "decade_all") : false),
   );
+  // the live layer filters decades on the server at any res; release decades stop at res 5
   const decadesAllowed = $derived(
-    hasDecade && sel.kind !== "taxon" && !(st.resMode === "manual" && st.res > RES_DECADE_MAX),
+    hasDecade &&
+      sel.kind !== "taxon" &&
+      (live || !(st.resMode === "manual" && st.res > RES_DECADE_MAX)),
   );
-  const resMax = $derived(st.decade === null ? RES_MAX : RES_DECADE_MAX);
+  const resMax = $derived(st.decade === null || live ? RES_MAX : RES_DECADE_MAX);
+  const aphiaHint = $derived.by(() => {
+    if (sel.kind !== "aphia") return "";
+    const parts = [`AphiaID ${sel.id}`];
+    const i = aphiaInfo && aphiaInfo.id === sel.id ? aphiaInfo : null;
+    if (i?.records != null) parts.push(`${i.records.toLocaleString("en-US")} records`);
+    if (i?.children_accepted) parts.push(`${i.children_accepted} accepted children`);
+    parts.push("computed live (h3t subtree)");
+    return parts.join(" · ");
+  });
+  /** the last AphiaID chosen, so toggling back to "Any taxon" restores it (Cetacea at first) */
+  let lastAphia = $state(2688);
+  $effect(() => {
+    if (sel.kind === "aphia") lastAphia = sel.id;
+  });
 
   let taxonFilter = $state("");
   const ranks = $derived([...new Set(taxonGroups.map((g) => g.rank))]);
@@ -42,6 +73,7 @@
   function setKind(kind: LayerSel["kind"]) {
     if (kind === "all") st.layer = "all";
     else if (kind === "eov") st.layer = layerKey({ kind: "eov", eov: EOVS[0].id });
+    else if (kind === "aphia") st.layer = layerKey({ kind: "aphia", id: lastAphia });
     else if (taxonGroups.length) {
       const g = taxonGroups[0];
       st.layer = layerKey({ kind: "taxon", rank: g.rank, taxon: g.taxon });
@@ -78,6 +110,12 @@
       <button class:on={sel.kind === "taxon"} disabled={!hasTaxon} onclick={() => setKind("taxon")}
         title={hasTaxon ? "" : "not in this release"}>Taxon group</button>
     </div>
+    <div class="seg">
+      <button class:on={sel.kind === "aphia"} disabled={!hasAphia} onclick={() => setKind("aphia")}
+        title={hasAphia
+          ? "children of any WoRMS AphiaID, computed live by the h3t subtree service"
+          : "the subtree service is unavailable"}>Any taxon (WoRMS){h3tHealth === "down" ? " — offline" : ""}</button>
+    </div>
     {#if sel.kind === "eov"}
       <select
         value={sel.eov}
@@ -105,6 +143,18 @@
         {/each}
       </select>
       <small class="hint">{sel.taxon} ({sel.rank})</small>
+    {:else if sel.kind === "aphia"}
+      <AphiaSearch base={h3tBase} onpick={(id) => (st.layer = layerKey({ kind: "aphia", id }))} />
+      <div class="taxon-line">
+        {#if aphiaInfo && aphiaInfo.id === sel.id}
+          <i>{aphiaInfo.scientificName}</i> ({aphiaInfo.rank.toLowerCase()}{aphiaInfo.status && aphiaInfo.status !== "accepted" ? `, ${aphiaInfo.status}` : ""})
+          {#if aphiaAccepted && aphiaAccepted.id !== aphiaInfo.id}→ <i>{aphiaAccepted.scientificName}</i>{/if}
+        {:else}
+          AphiaID {sel.id}
+        {/if}
+        <a href={wormsUrl(sel.id)} target="_blank" rel="noopener">▸ in WoRMS</a>
+      </div>
+      <small class="hint">{aphiaHint}</small>
     {/if}
   </fieldset>
 
@@ -159,11 +209,14 @@
   <fieldset class="field">
     <legend>Colour ramp domain</legend>
     <div class="seg">
-      <button class:on={st.domain === "release"} onclick={() => (st.domain = "release")}
-        title="p02–p98 of this layer, period and resolution across the whole release">release</button>
-      <button class:on={st.domain === "view"} onclick={() => (st.domain = "view")}
+      <button class:on={st.domain === "release" && !live} disabled={live} onclick={() => (st.domain = "release")}
+        title={live
+          ? "a live AphiaID layer has no release stats"
+          : "p02–p98 of this layer, period and resolution across the whole release"}>release</button>
+      <button class:on={st.domain === "view" || live} onclick={() => (st.domain = "view")}
         title="p02–p98 of the cells loaded for this view">loaded cells</button>
     </div>
+    {#if live}<small class="hint">live AphiaID layer: no release stats, the ramp comes from the loaded cells</small>{/if}
   </fieldset>
 
   <fieldset class="field">

@@ -92,3 +92,16 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   .shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .side { max-height: 45vh; border-right: 0; border-bottom: 1px solid var(--line); }
 }
+
+.aphia-search { position: relative; }
+.aphia-search .spin { position: absolute; right: 8px; top: 7px; margin: 0; }
+.hits { list-style: none; margin: 4px 0 0; padding: 0; max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; }
+.hits button {
+  display: flex; gap: 4px; width: 100%; text-align: left; background: transparent; color: var(--fg); border: 0;
+  border-bottom: 1px solid var(--line); padding: 3px 6px; font: inherit; font-size: 12px; cursor: pointer;
+}
+.hits button:hover { background: var(--line); }
+.hits button.syn { color: var(--dim); }
+.hits .rec { margin-left: auto; color: var(--dim); font-variant-numeric: tabular-nums; }
+.taxon-line { font-size: 12px; }
+.taxon-line a, .stats .title a { color: var(--accent); white-space: nowrap; }
