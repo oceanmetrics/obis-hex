@@ -71,7 +71,9 @@ HTTP URL needs the `%` encoded again (`%2520`). The app never builds either enco
 
 For a split resolution (`src/lib/view/viewport.ts`) the app covers the visible bounds with h3-js
 `polygonToCells` at the parent resolution (split at the antimeridian, in strips of at most 90°),
-adds a ring of one cell (`gridDisk`) so cells that only clip the edge are included, keeps the
+adds a ring of one cell (`gridDisk`) so cells that only clip the edge are included (for the taxon
+layer's res-0 base-cell parents a ring would mean 7 continent-sized files for a small view, so
+coarse parents use H3's "overlapping" containment instead, with no ring), keeps the
 parents the manifest has, and loads them into a DuckDB table `part_cache` (one `read_parquet` of
 the new files; each file is fetched once and kept, least recently used dropped beyond 512). The
 view is a `UNION` of the cached partitions in DuckDB. On `moveend` the cover is recomputed and only
@@ -167,7 +169,7 @@ Measured at 0.2.0 (2026-10-07):
 
 | | gzip | budget |
 |---|---|---|
-| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 597.3 KB | 650 KB |
+| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 597.5 KB | 650 KB |
 | runtime worker (MapLibre's) | 140.2 KB | 150 KB |
 | DuckDB-WASM (lazy: JS chunk 45 KB, wasm ~7.8 MB) | not counted | must stay lazy |
 

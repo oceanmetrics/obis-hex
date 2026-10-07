@@ -1,7 +1,14 @@
 // viewport loading for split resolutions (layout v2): which parent partitions cover the map view,
 // and the view plan (the resolution actually served, its files, and a notice when the requested
 // resolution would need too many partitions and a coarser one is served instead).
-import { getHexagonAreaAvg, gridDisk, latLngToCell, polygonToCells } from "h3-js";
+import {
+  getHexagonAreaAvg,
+  gridDisk,
+  latLngToCell,
+  polygonToCells,
+  polygonToCellsExperimental,
+  POLYGON_TO_CELLS_FLAGS,
+} from "h3-js";
 import type { LayerSel } from "../data/layers";
 import type { FileRow, Manifest } from "../release/manifest";
 
@@ -53,15 +60,32 @@ export function estimateCells(b: Bounds, res: number): number {
   return (frac * EARTH_KM2) / getHexagonAreaAvg(res, "km2");
 }
 
+/** the ring added around the centre-cover: 1 for parents at res >= 2; none for the huge base
+ * (res 0) and res-1 parents of the taxon layer, where a ring would load up to 7 continent-sized
+ * partitions for a small view; those use H3's "overlapping" containment instead. */
+export const coverRing = (res: number) => (res >= 2 ? 1 : 0);
+
 /**
  * The cells at `res` covering the bounds: polygonToCells (cell centres inside the view) plus a
- * ring of `ring` cells, so a cell that only clips the view edge is included. Returns null when
- * the view clearly holds more than `limit` cells (checked before any cell is computed).
+ * ring of `ring` cells, so a cell that only clips the view edge is included; with `ring` 0, the
+ * cells overlapping the view (polygonToCellsExperimental, containmentOverlapping). Returns null
+ * when the view clearly holds more than `limit` cells (checked before any cell is computed).
  */
-export function coverCells(b: Bounds, res: number, limit: number, ring = 1): string[] | null {
+export function coverCells(
+  b: Bounds,
+  res: number,
+  limit: number,
+  ring = coverRing(res),
+): string[] | null {
   if (estimateCells(b, res) > limit * 4) return null;
   const core = new Set<string>();
-  for (const r of boundsRings(b)) for (const c of polygonToCells(r, res)) core.add(c);
+  for (const r of boundsRings(b)) {
+    const cells =
+      ring > 0
+        ? polygonToCells(r, res)
+        : polygonToCellsExperimental(r, res, POLYGON_TO_CELLS_FLAGS.containmentOverlapping);
+    for (const c of cells) core.add(c);
+  }
   if (core.size > limit * 4) return null;
   // a view smaller than one cell may hold no cell centre: seed with the cell at its centre
   if (!core.size) {

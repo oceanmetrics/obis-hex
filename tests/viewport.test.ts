@@ -74,6 +74,14 @@ describe("viewport cover", () => {
     expect(cover).toHaveLength(7);
   });
 
+  it("coarse parents (res 0/1): the overlapping cells, no ring", () => {
+    const b: Bounds = [-122.6, 36.4, -121.8, 37]; // ~ zoom 9 at Monterey Bay
+    const cover = coverCells(b, 0, 64)!;
+    expect(cover.length).toBeLessThanOrEqual(2); // not the 7 a ring would add
+    for (let x = b[0]; x <= b[2]; x += 0.1)
+      for (let y = b[1]; y <= b[3]; y += 0.1) expect(cover).toContain(latLngToCell(y, x, 0));
+  });
+
   it("gives up early (null) on a view far beyond the limit", () => {
     expect(estimateCells([-180, -85, 180, 85], 3)).toBeGreaterThan(30000);
     expect(coverCells([-180, -85, 180, 85], 3, 64)).toBeNull();
