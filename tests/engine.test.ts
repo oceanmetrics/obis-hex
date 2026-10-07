@@ -9,6 +9,7 @@ import { Engine } from "../src/lib/engine/engine";
 import { fileUrl } from "../src/lib/release/manifest";
 import { loadMeta, statsSql, type ReleaseMeta, type StatsRow } from "../src/lib/release/release";
 import { viewStats } from "../src/lib/color/ramp";
+import { decadeCountsSql, decadeFiles, normalizeCounts } from "../src/lib/release/decades";
 import { createNodeDb } from "./helpers/nodeDb";
 
 const FIXTURE = `${resolve(__dirname, "fixtures/release")}/`;
@@ -31,6 +32,7 @@ describe("engine on the fixture release", () => {
     expect(release.layers.eov).toBeUndefined();
     expect(meta.manifest.lookup({ kind: "eov", eov: "fish" }, null, 3)).toBeNull();
     expect(meta.taxonGroups).toEqual([]);
+    expect(meta.eovCounts).toEqual({});
     expect(meta.statsLoaded).toBe(true);
   });
 
@@ -109,6 +111,24 @@ describe("engine on the fixture release", () => {
     const ua = await e.loadUnion([a]);
     expect(ua.fetched).toEqual([a]);
     await e.dispose();
+  });
+
+  it("records per decade: sum(n) over the res-1 decade file equals the loaded partition's sum", async () => {
+    const files = decadeFiles(meta.manifest, { kind: "all" }, true).filter(({ file }) =>
+      existsSync(`${FIXTURE}${file.url_path}`),
+    );
+    expect(files.map((f) => f.decade)).toEqual([2000, null]);
+    const rows = await engine.rows<{ decade: number | null; n: number }>(decadeCountsSql(FIXTURE, files));
+    const { decades, total } = normalizeCounts(rows);
+    const p2000 = await engine.loadPartition(fileUrl(FIXTURE, meta.manifest.lookup({ kind: "all" }, 2000, 1)!));
+    const pAll = await engine.loadPartition(fileUrl(FIXTURE, meta.manifest.lookup({ kind: "all" }, null, 1)!));
+    const sum = (a: Float64Array) => a.reduce((x, v) => x + v, 0);
+    expect(decades.find((d) => d.decade === 2000)!.n).toBe(sum(p2000.values.n));
+    expect(total).toBe(sum(pAll.values.n));
+    expect(total!).toBeGreaterThanOrEqual(decades.reduce((a, d) => a + d.n, 0));
+    // taxon groups and live layers have no decade layers
+    expect(decadeFiles(meta.manifest, { kind: "taxon", rank: "class", taxon: "Aves" })).toEqual([]);
+    expect(decadeFiles(meta.manifest, { kind: "aphia", id: 2688 })).toEqual([]);
   });
 
   it("caches by URL", async () => {

@@ -14,6 +14,12 @@ import { posix } from "node:path";
 // overlay) + h3-js + Svelte 5 + the app = 593 KB gzip; MapLibre alone is ~290 KB of that (atlas
 // S2.md), deck.gl + h3-js most of the rest. 650 KB leaves ~75 KB headroom for the app to grow.
 export const CRITICAL_BUDGET_BYTES = 650 * 1024;
+// fonts and images in the static graph (0.4.0, @marinebon/ui): the kit's self-hosted woff2 (IBM Plex
+// Sans/Mono, Space Grotesk; ~525 KB for all nine faces, of which a browser fetches only the faces the
+// page uses) and the MBON wordmark PNGs (~24 KB). They are already compressed, never parsed as script,
+// and load in parallel with the JS, so they get their own budget instead of eating the code's.
+export const FONT_IMAGE_BUDGET_BYTES = 600 * 1024;
+export const FONT_IMAGE_RE = /\.(woff2?|ttf|otf|png|jpe?g|gif|webp|avif|svg)$/i;
 // maplibre-gl's own worker, ~144 KB gzip (atlas S2.md); DuckDB's workers are lazy and never counted.
 export const RUNTIME_WORKER_BUDGET_BYTES = 150 * 1024;
 
@@ -203,6 +209,7 @@ export function findWorkerAssets(fileContents, readFile, emittedFiles = []) {
  * @param {(relPath: string) => Buffer} opts.readFile reads a dist-relative file as a Buffer
  * @param {number} [opts.budgetBytes] static critical-path budget, gzip bytes
  * @param {number} [opts.workerBudgetBytes] runtime-worker budget, gzip bytes (F3)
+ * @param {number} [opts.fontImageBudgetBytes] fonts and images budget, raw bytes (0.4.0, the MBON kit)
  * @param {string[]} [opts.emittedFiles] every dist-relative file the build emitted (N1's
  *   basename-lookup fallback for a worker reference that doesn't resolve where its own text says it
  *   should); defaults to empty, in which case a reference that doesn't resolve directly is a FAIL, not
@@ -216,6 +223,7 @@ export function evaluateBudget({
   readFile,
   budgetBytes = CRITICAL_BUDGET_BYTES,
   workerBudgetBytes = RUNTIME_WORKER_BUDGET_BYTES,
+  fontImageBudgetBytes = FONT_IMAGE_BUDGET_BYTES,
   emittedFiles = [],
   // atlas-7: see findForbiddenMarkers's own doc comment. Defaults to every marker (index.html's
   // invocation never passes this) -- an entry that legitimately narrates a lazy dependency's name
@@ -226,8 +234,10 @@ export function evaluateBudget({
     ok: false,
     totalGzipBytes: 0,
     workerGzipBytes: 0,
+    fontImageBytes: 0,
     files: [],
     workerFiles: [],
+    fontImageFiles: [],
     reasons: [reason],
   });
 
@@ -267,9 +277,14 @@ export function evaluateBudget({
   }
   const workerFiles = new Set(workerRaw.keys());
 
+  const fontImageFiles = [...raw.keys()].filter((f) => FONT_IMAGE_RE.test(f));
+  let fontImageBytes = 0;
+  for (const f of fontImageFiles) fontImageBytes += raw.get(f).length; // already compressed: raw bytes
+
   let totalGzipBytes = 0;
   for (const [f, buf] of raw) {
     if (workerFiles.has(f)) continue; // reclassified as a worker — budgeted separately, below
+    if (FONT_IMAGE_RE.test(f)) continue; // fonts and images — budgeted separately, below
     totalGzipBytes += gzipSize(buf);
   }
 
@@ -279,7 +294,7 @@ export function evaluateBudget({
   // the forbidden-lazy-marker scan covers the worker files too (F3): a worker is just as reachable
   // before first interaction as anything else on the static path, so an accidentally-inlined duckdb/etc.
   // chunk inside a worker is exactly the same fault as one inside the main bundle.
-  const allContents = new Map(contents);
+  const allContents = new Map([...contents].filter(([f]) => !FONT_IMAGE_RE.test(f)));
   for (const [f, buf] of workerRaw) allContents.set(f, buf.toString("utf8"));
 
   // N1: a worker reference that couldn't be resolved (or wasn't a literal at all) is a hard FAIL — it
@@ -291,8 +306,13 @@ export function evaluateBudget({
         `from one as a runtime worker): "${hit.path}" — it must be dynamically imported instead`,
     );
   }
+  if (fontImageBytes > fontImageBudgetBytes) {
+    reasons.push(
+      `fonts and images ${fontImageBytes} B exceed the ${fontImageBudgetBytes} B budget (${fontImageFiles.join(", ")})`,
+    );
+  }
   if (totalGzipBytes > budgetBytes) {
-    const staticFiles = [...raw.keys()].filter((f) => !workerFiles.has(f));
+    const staticFiles = [...raw.keys()].filter((f) => !workerFiles.has(f) && !FONT_IMAGE_RE.test(f));
     reasons.push(
       `critical-path gzip size ${totalGzipBytes} B exceeds the ${budgetBytes} B budget (${staticFiles.join(", ")})`,
     );
@@ -307,8 +327,10 @@ export function evaluateBudget({
     ok: reasons.length === 0,
     totalGzipBytes,
     workerGzipBytes,
-    files: [...raw.keys()].filter((f) => !workerFiles.has(f)),
+    fontImageBytes,
+    files: [...raw.keys()].filter((f) => !workerFiles.has(f) && !FONT_IMAGE_RE.test(f)),
     workerFiles: [...workerFiles],
+    fontImageFiles,
     reasons,
   };
 }

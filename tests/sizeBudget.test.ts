@@ -46,4 +46,23 @@ describe("size budget", () => {
     });
     expect(r.ok).toBe(false);
   });
+
+  it("budgets fonts and images apart from the code (the MBON kit's woff2 and wordmark)", () => {
+    const f2: Record<string, Buffer> = {
+      "assets/index.js": Buffer.from("console.log('app')"),
+      "assets/IBMPlexSans-Regular-x.woff2": Buffer.alloc(60_000, 1),
+      "assets/mbon-logo-x.png": Buffer.alloc(12_000, 2),
+    };
+    const manifest = {
+      "index.html": { file: "assets/index.js", assets: ["assets/IBMPlexSans-Regular-x.woff2", "assets/mbon-logo-x.png"] },
+    };
+    const r = evaluateBudget({ manifest, entryKey: "index.html", readFile: (p: string) => f2[p], budgetBytes: 1000 });
+    expect(r.ok).toBe(true);
+    expect(r.files).toEqual(["assets/index.js"]);
+    expect(r.fontImageFiles).toEqual(["assets/IBMPlexSans-Regular-x.woff2", "assets/mbon-logo-x.png"]);
+    expect(r.fontImageBytes).toBe(72_000);
+    const over = evaluateBudget({ manifest, entryKey: "index.html", readFile: (p: string) => f2[p], fontImageBudgetBytes: 50_000 });
+    expect(over.ok).toBe(false);
+    expect(over.reasons.join()).toContain("fonts and images");
+  });
 });

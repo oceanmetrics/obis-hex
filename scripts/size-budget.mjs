@@ -9,6 +9,7 @@ import {
   CRITICAL_BUDGET_BYTES,
   RUNTIME_WORKER_BUDGET_BYTES,
   FORBIDDEN_LAZY_MARKERS,
+  FONT_IMAGE_BUDGET_BYTES,
 } from "./size-budget-core.mjs";
 
 function parseArgs(argv) {
@@ -99,6 +100,10 @@ process.stdout.write(
   `size-budget: ${result.workerFiles.length} runtime worker(s), ${kb(result.workerGzipBytes)} KB gzip (budget ${kb(workerBudgetKb * 1024)} KB)\n`,
 );
 for (const f of result.workerFiles) process.stdout.write(`  - ${f}\n`);
+
+process.stdout.write(
+  `size-budget: ${result.fontImageFiles.length} font/image file(s), ${kb(result.fontImageBytes)} KB (budget ${kb(FONT_IMAGE_BUDGET_BYTES)} KB; fetched on use, not counted below)\n`,
+);
 
 const combined = result.totalGzipBytes + result.workerGzipBytes;
 const combinedBudget = budgetKb * 1024 + workerBudgetKb * 1024;

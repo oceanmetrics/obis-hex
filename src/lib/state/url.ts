@@ -2,10 +2,29 @@
 // it). Parsing never throws: an unknown or malformed value falls back to its default.
 //
 //   #i=es&l=eov:fish&p=1990&r=auto&o=0.85&t=dark&d=release&g=flat&c=-20.00,5.00,1.40
+//
+// The nine keys above are always written, in that order, so every link made before the MBON
+// re-layout (v0.4.0) parses to the same view and formats back to the same string. The layout keys
+// added in 0.4.0 are written only when they differ from their default (see LAYOUT_KEYS):
+//   k=place|indicator|share   Controls tab (default taxon)
+//   cc=1                      Controls pane folded to its pill
+//   tc=1                      Time strip folded
+//   x=<h3>                    the selected cell (lights the Cell pill)
+//   xo=1                      the Cell pane open
+//   b=0                       basemap labels off
 import { isIndicator, parseLayerKey, layerKey, type Indicator } from "../data/layers";
 import { RES_MAX } from "./resolution";
 
 export const DECADES = [1960, 1970, 1980, 1990, 2000, 2010, 2020] as const;
+
+/** the Controls tabs, in pipeline order: dataset (taxon) → place → method (indicator) → delivery */
+export const TABS = ["taxon", "place", "indicator", "share"] as const;
+export type Tab = (typeof TABS)[number];
+
+/** the hash keys of the layout state, written only when not at their default */
+export const LAYOUT_KEYS = ["k", "cc", "tc", "x", "xo", "b"] as const;
+
+const H3_RE = /^[0-9a-f]{15}$/;
 
 export interface AppState {
   indicator: Indicator;
@@ -25,6 +44,18 @@ export interface AppState {
   lon: number;
   lat: number;
   zoom: number;
+  /** the open Controls tab */
+  tab: Tab;
+  /** the Controls pane folded to its pill */
+  ctlFolded: boolean;
+  /** the Time strip folded */
+  timeFolded: boolean;
+  /** the selected (clicked) cell, an H3 index; null = none */
+  cell: string | null;
+  /** the Cell pane open (else a pill on the right edge, lit while a cell is selected) */
+  cellOpen: boolean;
+  /** basemap labels (place names) drawn over the hexagons */
+  labels: boolean;
 }
 
 export const DEFAULT_STATE: AppState = {
@@ -40,6 +71,12 @@ export const DEFAULT_STATE: AppState = {
   lon: -20,
   lat: 5,
   zoom: 1.4,
+  tab: "taxon",
+  ctlFolded: false,
+  timeFolded: false,
+  cell: null,
+  cellOpen: false,
+  labels: true,
 };
 
 const round = (x: number, d: number) => Number(x.toFixed(d));
@@ -59,6 +96,12 @@ export function formatHash(s: AppState): string {
     ["g", s.proj],
     ["c", [round(s.lon, 3), round(s.lat, 3), round(s.zoom, 2)].join(",")],
   ];
+  if (s.tab !== DEFAULT_STATE.tab) p.push(["k", s.tab]);
+  if (s.ctlFolded) p.push(["cc", "1"]);
+  if (s.timeFolded) p.push(["tc", "1"]);
+  if (s.cell) p.push(["x", s.cell]);
+  if (s.cellOpen) p.push(["xo", "1"]);
+  if (!s.labels) p.push(["b", "0"]);
   return `#${p.map(([k, v]) => `${k}=${k === "l" ? v : encodeURIComponent(v).replace(/%2C/g, ",")}`).join("&")}`;
 }
 
@@ -119,5 +162,21 @@ export function parseHash(hash: string): AppState {
       s.zoom = zoom;
     }
   }
+  const k = p.get("k");
+  if ((TABS as readonly string[]).includes(k ?? "")) s.tab = k as Tab;
+  s.ctlFolded = p.get("cc") === "1";
+  s.timeFolded = p.get("tc") === "1";
+  const x = (p.get("x") ?? "").toLowerCase();
+  if (H3_RE.test(x)) s.cell = x;
+  s.cellOpen = p.get("xo") === "1";
+  if (p.get("b") === "0") s.labels = false;
   return s;
+}
+
+/** true when the hash sets key `k` (e.g. whether a link chose the theme with `t=`) */
+export function hashHas(hash: string, k: string): boolean {
+  return hash
+    .replace(/^#/, "")
+    .split("&")
+    .some((kv) => kv.split("=")[0] === k);
 }

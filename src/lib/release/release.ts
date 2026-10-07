@@ -103,8 +103,8 @@ SELECT * FROM read_parquet(${lit(`${base}stats.parquet`)}, hive_partitioning = f
 export function taxonGroupsSql(base: string): string {
   return `SELECT kind, rank, taxon, label, n::DOUBLE AS n
 FROM read_parquet(${lit(`${base}taxon_groups.parquet`)}, hive_partitioning = false)
-WHERE kind = 'taxon'
-ORDER BY rank, taxon`;
+WHERE kind IN ('taxon', 'eov')
+ORDER BY kind DESC, rank, taxon`;
 }
 
 /** the release-wide stats row for one view (selection × decade × res × indicator). */
@@ -125,7 +125,10 @@ WHERE layer = ${lit(layer)} AND coalesce(key, '') = ${lit(key)} AND coalesce(ran
 
 export interface ReleaseMeta {
   manifest: Manifest;
+  /** the taxon groups (kind = 'taxon') */
   taxonGroups: TaxonGroup[];
+  /** records per EOV (taxon_groups.parquet kind = 'eov'), keyed by EOV id */
+  eovCounts: Record<string, number>;
   statsLoaded: boolean;
 }
 
@@ -141,9 +144,13 @@ export async function loadMeta(engine: Engine, base: string): Promise<ReleaseMet
   } catch {
     statsLoaded = false;
   }
-  let taxonGroups: TaxonGroup[] = [];
-  if (manifest.hasLayer("taxon")) {
-    taxonGroups = await engine.rows<TaxonGroup>(taxonGroupsSql(base)).catch(() => []);
+  let groups: TaxonGroup[] = [];
+  if (manifest.hasLayer("taxon") || manifest.hasLayer("eov")) {
+    groups = await engine.rows<TaxonGroup>(taxonGroupsSql(base)).catch(() => []);
   }
-  return { manifest, taxonGroups, statsLoaded };
+  const taxonGroups = groups.filter((g) => g.kind === "taxon");
+  const eovCounts = Object.fromEntries(
+    groups.filter((g) => g.kind === "eov").map((g) => [g.taxon, Number(g.n)]),
+  );
+  return { manifest, taxonGroups, eovCounts, statsLoaded };
 }

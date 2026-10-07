@@ -11,6 +11,15 @@ export const INDICATORS: { id: Indicator; label: string; short: string }[] = [
   { id: "n", label: "Number of records", short: "Records" },
 ];
 
+/** one line of meaning per indicator (the Indicator tab and chip) */
+export const INDICATOR_HELP: Record<Indicator, string> = {
+  es: "Hurlbert's expected number of species in 50 records drawn at random; comparable across effort, blank where a hexagon has fewer than 50 records.",
+  sp: "Distinct species recorded in the hexagon; grows with sampling effort.",
+  shannon: "H′ = −Σ pᵢ ln pᵢ over species: richness and evenness together.",
+  simpson: "Σ pᵢ², the chance two records are the same species (lower = more diverse).",
+  n: "OBIS occurrence records in the hexagon: where sampling happened.",
+};
+
 export function isIndicator(x: unknown): x is Indicator {
   return INDICATORS.some((i) => i.id === x);
 }
