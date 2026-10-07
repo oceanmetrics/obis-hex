@@ -268,4 +268,4 @@ with its notice. Bytes per view (network-measured): all taxa res 1 = 25.0 KB; se
 391.3 KB; Aves res 7 Monterey = 1 of 122 partitions, 602.2 KB; seabirds res 2 = 103.4 KB, the same
 as before. The Time strip adds one query per layer after the map loads (seabirds 90 KB, all taxa
 153 KB: DuckDB reads the small res-1 decade files whole). Tests 102 → 126; size budget 601.6 →
-631.1 KB gzip (650 KB) plus a separate fonts/images budget; `npm run figures` re-run.
+631.2 KB gzip (650 KB) plus a separate fonts/images budget; `npm run figures` re-run.
