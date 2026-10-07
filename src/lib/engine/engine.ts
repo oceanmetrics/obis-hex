@@ -5,7 +5,8 @@
 //
 // Dependency-injectable: `createDb` defaults to the browser boot (bundles.ts, reached only through
 // a dynamic import so DuckDB stays off the critical path); tests pass a Node DuckDB-WASM instead.
-import { partitionSql, VALUE_COLUMNS } from "./sql";
+import { cacheInsertSql, partitionSql, unionSql, VALUE_COLUMNS, CACHE_TABLE_SQL } from "./sql";
+import { lit } from "./sql";
 import type { Indicator } from "../data/layers";
 
 /** the slice of an Arrow vector/table this module reads (structural, so no arrow import). */
@@ -22,8 +23,9 @@ export interface DbLike {
   close(): Promise<void>;
 }
 
-/** one loaded partition, columnar, ready for deck.gl. */
+/** one loaded partition (or the union of several), columnar, ready for deck.gl. */
 export interface Partition {
+  /** identity: the file URL, or for a union a key over its sorted URLs */
   url: string;
   sql: string;
   rows: number;
@@ -40,6 +42,16 @@ export class EngineError extends Error {
   }
 }
 
+function toPartition(url: string, sql: string, t: ArrowTableLike, ms: number): Partition {
+  const h3 = Array.from(t.getChild("h3")?.toArray() ?? [], String);
+  const values = {} as Record<Indicator, Float64Array>;
+  for (const c of VALUE_COLUMNS) {
+    const v = t.getChild(c)?.toArray();
+    values[c] = v instanceof Float64Array ? v : Float64Array.from(v ?? [], Number);
+  }
+  return { url, sql, rows: t.numRows, h3, values, ms };
+}
+
 const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
 export class Engine {
@@ -47,6 +59,12 @@ export class Engine {
   #db: Promise<DbLike> | null = null;
   #chain: Promise<unknown> = Promise.resolve();
   #cache = new Map<string, Promise<Partition>>();
+  /** parent partitions held in the DuckDB `part_cache` table, URL → last use (LRU) */
+  #parts = new Map<string, number>();
+  #useClock = 0;
+  #cacheTable: Promise<unknown> | null = null;
+  /** max parent partitions kept in DuckDB before the least recently used are deleted */
+  maxCachedParts = 512;
 
   constructor(opts: { createDb?: () => Promise<DbLike> } = {}) {
     this.#createDb =
@@ -103,17 +121,55 @@ export class Engine {
       const sql = partitionSql(url);
       const t0 = now();
       const t = await this.query(sql);
-      const h3 = Array.from(t.getChild("h3")?.toArray() ?? [], String);
-      const values = {} as Record<Indicator, Float64Array>;
-      for (const c of VALUE_COLUMNS) {
-        const v = t.getChild(c)?.toArray();
-        values[c] = v instanceof Float64Array ? v : Float64Array.from(v ?? [], Number);
-      }
-      return { url, sql, rows: t.numRows, h3, values, ms: now() - t0 };
+      return toPartition(url, sql, t, now() - t0);
     })();
     this.#cache.set(url, p);
     p.catch(() => this.#cache.delete(url));
     return p;
+  }
+
+  /** how many parent partitions are held in DuckDB */
+  get partsCached(): number {
+    return this.#parts.size;
+  }
+
+  /**
+   * Load a set of parent partitions and return their UNION ALL as one Partition. Each file is
+   * fetched once and kept in the DuckDB table `part_cache` (keyed by URL), so panning fetches
+   * only the partitions new to the view; the union itself is a local query. `fetched` lists the
+   * URLs this call had to read.
+   */
+  async loadUnion(urls: string[]): Promise<Partition & { fetched: string[] }> {
+    const sorted = [...new Set(urls)].sort();
+    const t0 = now();
+    this.#cacheTable ??= this.query(CACHE_TABLE_SQL).catch((err) => {
+      this.#cacheTable = null;
+      throw err;
+    });
+    await this.#cacheTable;
+    const missing = sorted.filter((u) => !this.#parts.has(u));
+    if (missing.length) {
+      await this.query(cacheInsertSql(missing));
+      for (const u of missing) this.#parts.set(u, 0);
+    }
+    const tick = ++this.#useClock;
+    for (const u of sorted) this.#parts.set(u, tick);
+    await this.#evict(new Set(sorted));
+    const sql = unionSql(sorted);
+    const t = await this.query(sql);
+    return { ...toPartition(`union:${sorted.join("|")}`, sql, t, now() - t0), fetched: missing };
+  }
+
+  async #evict(keep: Set<string>): Promise<void> {
+    if (this.#parts.size <= this.maxCachedParts) return;
+    const old = [...this.#parts.entries()]
+      .filter(([u]) => !keep.has(u))
+      .sort((a, b) => a[1] - b[1])
+      .slice(0, this.#parts.size - this.maxCachedParts)
+      .map(([u]) => u);
+    if (!old.length) return;
+    await this.query(`DELETE FROM part_cache WHERE url IN (${old.map(lit).join(", ")})`);
+    for (const u of old) this.#parts.delete(u);
   }
 
   async dispose(): Promise<void> {
@@ -122,6 +178,8 @@ export class Engine {
     await db?.close().catch(() => {});
     this.#db = null;
     this.#cache.clear();
+    this.#parts.clear();
+    this.#cacheTable = null;
   }
 
   #enqueue<T>(fn: () => Promise<T>): Promise<T> {

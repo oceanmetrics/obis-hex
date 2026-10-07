@@ -167,6 +167,14 @@
   </fieldset>
 
   <fieldset class="field">
+    <legend>Projection</legend>
+    <div class="seg">
+      <button class:on={st.proj === "flat"} onclick={() => (st.proj = "flat")}>flat</button>
+      <button class:on={st.proj === "globe"} onclick={() => (st.proj = "globe")}>globe</button>
+    </div>
+  </fieldset>
+
+  <fieldset class="field">
     <legend>Basemap</legend>
     <div class="seg">
       <button class:on={st.theme === "dark"} onclick={() => (st.theme = "dark")}>dark</button>

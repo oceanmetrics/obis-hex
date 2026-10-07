@@ -2,9 +2,9 @@
   "release": "demo",
   "obis_snapshot": "demo",
   "store": "obis_h3_satlantic_v20260728.duckdb",
-  "obisindicators_version": "0.7.0",
+  "obisindicators_version": "0.7.1",
   "duckdb_version": "v1.5.5",
-  "built_at": "2026-10-07T17:23:39Z",
+  "built_at": "2026-10-07T21:22:23Z",
   "esn": 50,
   "res": [1, 2, 3, 4, 5, 6, 7],
   "res_decade": [1, 2, 3, 4, 5],
@@ -16,8 +16,13 @@
       "partitions": ["res"],
       "template": "all/res=<res>/data_0.parquet",
       "rows": 598384,
-      "files": 7,
-      "bytes": 4033052
+      "parent_res": {
+        "6": 2,
+        "7": 3
+      },
+      "template_parent": "all/res=<res>/p=<parent>/data_0.parquet",
+      "files": 4541,
+      "bytes": 9731308
     },
     "taxon": {
       "path": "taxon",
@@ -33,7 +38,7 @@
       "template": "decade/all/decade=<decade>/res=<res>/data_0.parquet",
       "rows": 125839,
       "files": 35,
-      "bytes": 1623868
+      "bytes": 1626596
     }
   },
   "columns": {
@@ -58,8 +63,20 @@
   "decade_note": "decade = floor(date_year / 10) * 10; records with no year are excluded; indicators computed with the same SQL as idx_h3 / idx_h3_eov.",
   "files": {
     "file": "files.parquet",
-    "columns": ["layer", "path", "url_path", "rows", "bytes"],
-    "n_files": 45,
+    "columns": ["layer", "path", "url_path", "rows", "bytes", "parent"],
+    "n_files": 4579,
     "note": "manifest of every parquet file except itself (HTTP cannot glob)"
+  },
+  "parents": {
+    "parent_res": {
+      "6": 2,
+      "7": 3
+    },
+    "parent_res_taxon": {
+      "6": 0,
+      "7": 0
+    },
+    "parent_min_rows": 50000,
+    "note": "a layer's resolutions listed in its `parent_res` are split one file per parent cell, <layer path>/.../res=<r>/p=<parent h3>/data_0.parquet, for every (layer key, res) with more than parent_min_rows rows (others stay whole); files.parquet `parent` is that parent cell (NULL for a whole file), and its H3 resolution is the parent resolution. A viewer loads the parents covering its viewport."
   }
 }

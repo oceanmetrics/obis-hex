@@ -1,7 +1,7 @@
 // the whole view lives in the URL hash (like the atlas: the URL is the view, so any link reproduces
 // it). Parsing never throws: an unknown or malformed value falls back to its default.
 //
-//   #i=es&l=eov:fish&p=1990&r=auto&o=0.85&t=dark&d=release&c=-20.00,5.00,1.40
+//   #i=es&l=eov:fish&p=1990&r=auto&o=0.85&t=dark&d=release&g=flat&c=-20.00,5.00,1.40
 import { isIndicator, parseLayerKey, layerKey, type Indicator } from "../data/layers";
 import { RES_MAX } from "./resolution";
 
@@ -20,6 +20,8 @@ export interface AppState {
   theme: "dark" | "light";
   /** colour ramp domain: the release's p02–p98 for this view, or the loaded partition's own */
   domain: "release" | "view";
+  /** map projection: MapLibre globe or flat web mercator */
+  proj: "globe" | "flat";
   lon: number;
   lat: number;
   zoom: number;
@@ -34,6 +36,7 @@ export const DEFAULT_STATE: AppState = {
   opacity: 0.85,
   theme: "dark",
   domain: "release",
+  proj: "flat",
   lon: -20,
   lat: 5,
   zoom: 1.4,
@@ -53,6 +56,7 @@ export function formatHash(s: AppState): string {
     ["o", String(round(s.opacity, 2))],
     ["t", s.theme],
     ["d", s.domain],
+    ["g", s.proj],
     ["c", [round(s.lon, 3), round(s.lat, 3), round(s.zoom, 2)].join(",")],
   ];
   return `#${p.map(([k, v]) => `${k}=${k === "l" ? v : encodeURIComponent(v).replace(/%2C/g, ",")}`).join("&")}`;
@@ -104,6 +108,8 @@ export function parseHash(hash: string): AppState {
   if (t === "dark" || t === "light") s.theme = t;
   const d = p.get("d");
   if (d === "release" || d === "view") s.domain = d;
+  const g = p.get("g");
+  if (g === "globe" || g === "flat") s.proj = g;
   const c = (p.get("c") ?? "").split(",").map(Number);
   if (c.length === 3 && c.every(Number.isFinite)) {
     const [lon, lat, zoom] = c;

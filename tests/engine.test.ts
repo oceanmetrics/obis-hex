@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getResolution, isValidCell } from "h3-js";
+import { cellToParent, getResolution, isValidCell } from "h3-js";
 import { Engine } from "../src/lib/engine/engine";
 import { fileUrl } from "../src/lib/release/manifest";
 import { loadMeta, statsSql, type ReleaseMeta, type StatsRow } from "../src/lib/release/release";
@@ -72,6 +72,43 @@ describe("engine on the fixture release", () => {
     const nanEs = p.values.es.filter((v, i) => Number.isNaN(v) && p.values.n[i] < 50).length;
     const anyNan = p.values.es.filter(Number.isNaN).length;
     expect(nanEs).toBe(anyNan); // only cells with n < 50 lack ES(50)
+  });
+
+  it("layout v2: res 7 is split by res-3 parent; a union of parents loads through DuckDB", async () => {
+    const v7 = meta.manifest.view({ kind: "all" }, null, 7)!;
+    expect(v7.whole).toBeNull();
+    expect(v7.parentRes).toBe(3);
+    expect(release.layers.all.parent_res).toEqual({ "6": 2, "7": 3 });
+    const parents = ["83de80fffffffff", "83de81fffffffff", "83de83fffffffff"];
+    const rows = parents.map((p) => v7.parents!.get(p)!);
+    const urls = rows.map((r) => fileUrl(FIXTURE, r));
+    const u = await engine.loadUnion(urls.slice(0, 2));
+    expect(u.fetched).toHaveLength(2);
+    expect(u.rows).toBe(rows[0].rows + rows[1].rows);
+    // the third is fetched alone; the first two come from the DuckDB cache
+    const all3 = await engine.loadUnion(urls);
+    expect(all3.fetched).toEqual([urls[2]]);
+    expect(all3.rows).toBe(rows.reduce((a, r) => a + r.rows, 0));
+    expect(engine.partsCached).toBe(3);
+    expect(new Set(all3.h3).size).toBe(all3.rows);
+    expect(all3.h3.every((h) => getResolution(h) === 7 && parents.includes(cellToParent(h, 3)))).toBe(
+      true,
+    );
+    expect(all3.values.n.every((v) => v >= 1)).toBe(true);
+  });
+
+  it("evicts the least recently used parent partitions beyond the cap", async () => {
+    const e = new Engine({ createDb: createNodeDb });
+    e.maxCachedParts = 1;
+    const v7 = meta.manifest.view({ kind: "all" }, null, 7)!;
+    const [a, b] = ["83de80fffffffff", "83de81fffffffff"].map((p) => fileUrl(FIXTURE, v7.parents!.get(p)!));
+    await e.loadUnion([a]);
+    const ub = await e.loadUnion([b]);
+    expect(e.partsCached).toBe(1);
+    expect(ub.rows).toBe(v7.parents!.get("83de81fffffffff")!.rows);
+    const ua = await e.loadUnion([a]);
+    expect(ua.fetched).toEqual([a]);
+    await e.dispose();
   });
 
   it("caches by URL", async () => {

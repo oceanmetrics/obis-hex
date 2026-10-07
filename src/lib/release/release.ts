@@ -89,7 +89,9 @@ export interface StatsRow {
 
 /** files.parquet → rows (int64 cast to DOUBLE so they arrive as JS numbers). */
 export function filesSql(base: string): string {
-  return `SELECT layer, path, url_path, rows::DOUBLE AS rows, bytes::DOUBLE AS bytes
+  // `parent` is new in layout v2; the Manifest also reads it from the `p=` path segment, so a
+  // release without the column (v1) loads the same way
+  return `SELECT * EXCLUDE (rows, bytes), rows::DOUBLE AS rows, bytes::DOUBLE AS bytes
 FROM read_parquet(${lit(`${base}files.parquet`)}, hive_partitioning = false)`;
 }
 

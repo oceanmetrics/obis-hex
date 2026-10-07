@@ -31,3 +31,34 @@ export function partitionSql(url: string): string {
 export function displaySql(url: string, indicator: Indicator): string {
   return `SELECT h3, ${indicator}\nFROM read_parquet(${lit(url)}, hive_partitioning = false)\nWHERE ${indicator} IS NOT NULL;`;
 }
+
+const valueCols = () =>
+  VALUE_COLUMNS.map((c) => `  coalesce(${c}::DOUBLE, 'NaN'::DOUBLE) AS ${c}`).join(",\n");
+
+/** the DuckDB table holding the loaded parent partitions (layout v2), one row per cell, tagged
+ * with the URL it came from. */
+export const CACHE_TABLE_SQL = `CREATE TABLE IF NOT EXISTS part_cache (
+  url VARCHAR, h3 VARCHAR, ${VALUE_COLUMNS.map((c) => `${c} DOUBLE`).join(", ")})`;
+
+/** fetch parent partitions into part_cache in one read (DuckDB's `filename` is the URL given). */
+export function cacheInsertSql(urls: string[]): string {
+  return `INSERT INTO part_cache
+SELECT
+  filename AS url,
+  h3,
+${valueCols()}
+FROM read_parquet([${urls.map(lit).join(", ")}], hive_partitioning = false, filename = true)`;
+}
+
+/** the union of the cached parent partitions a view needs. */
+export function unionSql(urls: string[]): string {
+  return `SELECT h3, ${VALUE_COLUMNS.join(", ")}
+FROM part_cache
+WHERE url IN (${urls.map(lit).join(", ")})`;
+}
+
+/** the user-facing SQL for a split view: the same files, read directly. */
+export function displayUnionSql(urls: string[], indicator: Indicator): string {
+  const list = urls.map((u) => `  ${lit(u)}`).join(",\n");
+  return `SELECT h3, ${indicator}\nFROM read_parquet([\n${list}\n], hive_partitioning = false)\nWHERE ${indicator} IS NOT NULL;`;
+}

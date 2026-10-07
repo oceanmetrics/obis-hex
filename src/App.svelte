@@ -4,7 +4,7 @@
   import { onMount } from "svelte";
   import type { PickingInfo } from "@deck.gl/core";
   import { Engine, type Partition } from "./lib/engine/engine";
-  import { displaySql } from "./lib/engine/sql";
+  import { displaySql, displayUnionSql } from "./lib/engine/sql";
   import {
     indicatorLabel,
     INDICATORS,
@@ -14,6 +14,7 @@
     type LayerSel,
   } from "./lib/data/layers";
   import { fileUrl } from "./lib/release/manifest";
+  import { planView, type Bounds } from "./lib/view/viewport";
   import {
     loadMeta,
     probeRelease,
@@ -44,6 +45,9 @@
   let release = $state.raw<ReleaseJson | null>(null);
   let meta = $state.raw<ReleaseMeta | null>(null);
   let partition = $state.raw<Partition | null>(null);
+  /** parent partitions fetched by the last split load (the rest came from the DuckDB cache) */
+  let fetchedLast = $state(0);
+  let bounds = $state.raw<Bounds | null>(null);
   let loading = $state(false);
   let loadError = $state("");
   let releaseStats = $state.raw<StatsRow | null>(null);
@@ -54,16 +58,31 @@
 
   // derived view ----
   const sel: LayerSel = $derived(parseLayerKey(st.layer) ?? { kind: "all" });
-  const res = $derived(effectiveRes(st.resMode, st.res, st.zoom, st.decade));
-  const fileRow = $derived(meta ? meta.manifest.lookup(sel, st.decade, res) : null);
-  const url = $derived(fileRow ? fileUrl(base, fileRow) : null);
+  const reqRes = $derived(effectiveRes(st.resMode, st.res, st.zoom, st.decade));
+  // the view plan: a whole file, or the parent partitions covering the viewport (layout v2), with
+  // a fallback to a coarser res when a split res would need more than MAX_PARENTS partitions
+  const plan = $derived(meta ? planView(meta.manifest, sel, st.decade, reqRes, bounds) : null);
+  const res = $derived(plan?.res ?? reqRes);
+  const urls = $derived(plan ? plan.files.map((f) => fileUrl(base, f)) : []);
+  // a string, so the load effect re-runs only when the set of files changes (not on every pan)
+  const loadKey = $derived(urls.length ? `${plan?.split ? "split" : "whole"}\n${urls.join("\n")}` : "");
+  const fileRow = $derived(plan && !plan.split ? plan.files[0] : null);
+  const planBytes = $derived(plan ? plan.files.reduce((a, f) => a + f.bytes, 0) : 0);
   const vstats = $derived(partition ? viewStats(partition.values[st.indicator]) : null);
   const domain = $derived(chooseDomain(st.domain, domainFromStats(releaseStats), vstats));
   const colors = $derived(partition ? cellColors(partition.values[st.indicator], domain) : null);
-  const sqlText = $derived(url ? displaySql(url, st.indicator) : "");
+  const sqlText = $derived(
+    !plan ? "" : plan.split ? displayUnionSql(urls, st.indicator) : displaySql(urls[0], st.indicator),
+  );
+  // the view described in words, so a screenshot explains itself
+  const viewTitle = $derived(
+    `${indicatorLabel(st.indicator)} · ${layerLabel(sel)} · ` +
+      `${st.decade === null ? "all years" : `${st.decade}–${st.decade + 9}`}` +
+      `${release?.obis_snapshot ? ` (OBIS ${release.obis_snapshot})` : ""} · H3 res ${res}`,
+  );
   const noDataReason = $derived.by(() => {
     if (!meta) return "";
-    if (fileRow) return "";
+    if (plan) return plan.split && !plan.files.length ? "No cells in this view." : "";
     if (sel.kind === "taxon" && st.decade !== null)
       return "Taxon groups have no decade partitions: choose All years.";
     if (!meta.manifest.hasLayer(manifestLayer(sel, st.decade) ?? ""))
@@ -82,18 +101,26 @@
     handle?.map.jumpTo({ center: [next.lon, next.lat], zoom: next.zoom });
   }
 
-  // load the partition for the view (cached by URL in the engine) ----
+  // load the view: one whole file (cached by URL), or the union of the parent partitions
+  // covering the viewport (each fetched once into DuckDB, refetched only when new ones appear) ----
   $effect(() => {
-    const u = url;
-    if (!u) {
+    const key = loadKey;
+    if (!key) {
       partition = null;
       return;
     }
+    const [mode, ...list] = key.split("\n");
     let cancelled = false;
     loading = true;
     loadError = "";
-    engine
-      .loadPartition(u)
+    const job =
+      mode === "split"
+        ? engine.loadUnion(list).then((p) => {
+            if (!cancelled) fetchedLast = p.fetched.length;
+            return p as Partition;
+          })
+        : engine.loadPartition(list[0]);
+    job
       .then((p) => {
         if (cancelled) return;
         partition = p;
@@ -112,7 +139,7 @@
   // the release's precomputed stats row for the view (the default ramp domain) ----
   $effect(() => {
     const layer = manifestLayer(sel, st.decade);
-    if (!meta?.statsLoaded || !layer || !fileRow) {
+    if (!meta?.statsLoaded || !layer || !plan) {
       releaseStats = null;
       statsQuery = "";
       return;
@@ -140,6 +167,9 @@
     handle.setLayers(
       partition && colors ? [hexLayer(partition, st.indicator, colors, st.opacity)] : [],
     );
+  });
+  $effect(() => {
+    handle?.setProjection(st.proj);
   });
   $effect(() => {
     handle?.setTheme(st.theme);
@@ -177,18 +207,21 @@
   onMount(() => {
     handle = createMap(mapEl, {
       theme: st.theme,
+      projection: st.proj,
       center: [st.lon, st.lat],
       zoom: st.zoom,
       onView: (v) => {
         st.lon = v.lon;
         st.lat = v.lat;
         st.zoom = v.zoom;
+        bounds = handle?.bounds() ?? null;
       },
       getTooltip: tooltip,
       onClick: (info) => {
         selected = cellAt(info);
       },
     });
+    bounds = handle.bounds();
     window.addEventListener("hashchange", onHashChange);
 
     (async () => {
@@ -216,7 +249,7 @@
   });
 </script>
 
-<div class="shell">
+<div class="shell" data-ready={partition && !loading && health === "ok" ? "1" : "0"}>
   <aside class="side">
     <header>
       <h1>OBIS hex</h1>
@@ -241,20 +274,27 @@
     <div class="map" bind:this={mapEl}></div>
     <div class="overlay-top">
       <StatsPanel
-        title={`${indicatorLabel(st.indicator)} · ${layerLabel(sel)} · ${st.decade === null ? "all years" : `${st.decade}s`} · res ${res}`}
+        title={viewTitle}
         {domain}
         domainSource={st.domain === "release" && releaseStats ? "release p02–p98" : "view p02–p98"}
         {vstats}
         {releaseStats}
         {loading}
-        message={loadError || noDataReason || (health === "probing" ? "Loading release…" : "")}
+        message={loadError || noDataReason || plan?.notice || (health === "probing" ? "Loading release…" : "")}
       />
     </div>
     {#if selected}
       <CellPanel cell={selected} indicator={st.indicator} onclose={() => (selected = null)} />
     {/if}
     <footer class="foot">
-      {#if partition && fileRow}
+      {#if partition && plan?.split}
+        <span title={plan.files.map((f) => f.path).join("\n")}
+          >{plan.files.length} of {fmt(plan.parentsTotal)} partitions (res {res} by parent cell)</span>
+        <span>{fmtBytes(planBytes)}</span>
+        <span>{fmt(partition.rows)} cells</span>
+        <span>{fetchedLast} fetched · {engine.partsCached} cached</span>
+        <span>{Math.round(partition.ms)} ms</span>
+      {:else if partition && fileRow}
         <span title={partition.url}>{fileRow.path}</span>
         <span>{fmtBytes(fileRow.bytes)}</span>
         <span>{fmt(partition.rows)} cells</span>

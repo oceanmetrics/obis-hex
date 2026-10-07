@@ -13,6 +13,7 @@ describe("URL hash state", () => {
       opacity: 0.4,
       theme: "light",
       domain: "view",
+      proj: "globe",
       lon: -123.456,
       lat: 36.789,
       zoom: 5.25,
@@ -36,8 +37,15 @@ describe("URL hash state", () => {
 
   it("falls back to defaults for junk, never throws", () => {
     expect(parseHash("")).toEqual(DEFAULT_STATE);
-    expect(parseHash("#i=bogus&l=eov:nope&p=1955&r=9&o=3&t=pink&d=x&c=1,2")).toEqual(DEFAULT_STATE);
+    expect(parseHash("#i=bogus&l=eov:nope&p=1955&r=9&o=3&t=pink&d=x&g=sphere&c=1,2")).toEqual(DEFAULT_STATE);
     expect(parseHash("#l=taxon:%E0%A4%A:x")).toEqual(DEFAULT_STATE);
+  });
+
+  it("projection: globe round-trips, absent means flat", () => {
+    const h = formatHash({ ...DEFAULT_STATE, proj: "globe" });
+    expect(h).toContain("g=globe");
+    expect(parseHash(h).proj).toBe("globe");
+    expect(parseHash("#i=sp").proj).toBe("flat");
   });
 
   it("rounds the camera", () => {

@@ -18,10 +18,15 @@ export const BASEMAP_STYLE: Record<"dark" | "light", string> = {
 
 let wired = false;
 
+export type Projection = "globe" | "flat";
+
 export interface MapHandle {
   map: MapLibreMap;
   overlay: MapboxOverlay;
   setTheme(theme: "dark" | "light"): void;
+  setProjection(p: Projection): void;
+  /** the visible bounds [west, south, east, north] (west may be < -180 with world copies) */
+  bounds(): [number, number, number, number];
   setLayers(layers: Layer[]): void;
   destroy(): void;
 }
@@ -30,6 +35,7 @@ export function createMap(
   container: HTMLElement,
   opts: {
     theme: "dark" | "light";
+    projection: Projection;
     center: [number, number];
     zoom: number;
     onView: (v: { lon: number; lat: number; zoom: number }) => void;
@@ -42,6 +48,7 @@ export function createMap(
     wired = true;
   }
   let theme = opts.theme;
+  let projection = opts.projection;
   const map = new MapLibreMap({
     container,
     style: BASEMAP_STYLE[theme],
@@ -70,6 +77,12 @@ export function createMap(
   });
   map.addControl(overlay);
 
+  // the projection is part of the style in MapLibre: (re)apply it whenever a style loads
+  const applyProjection = () => {
+    map.setProjection({ type: projection === "globe" ? "globe" : "mercator" });
+  };
+  map.on("style.load", applyProjection);
+
   map.on("moveend", () => {
     const c = map.getCenter();
     opts.onView({ lon: c.lng, lat: c.lat, zoom: map.getZoom() });
@@ -82,6 +95,15 @@ export function createMap(
       if (t === theme) return;
       theme = t;
       map.setStyle(BASEMAP_STYLE[t]);
+    },
+    setProjection(p) {
+      if (p === projection) return;
+      projection = p;
+      if (map.isStyleLoaded()) applyProjection();
+    },
+    bounds() {
+      const b = map.getBounds();
+      return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
     },
     setLayers(layers) {
       overlay.setProps({ layers });
