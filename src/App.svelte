@@ -25,6 +25,7 @@
     type StatsRow,
   } from "./lib/release/release";
   import { formatHash, parseHash, type AppState } from "./lib/state/url";
+  import { legacyQuery, legacyToState } from "./lib/state/legacy";
   import { effectiveRes, zoomToRes } from "./lib/state/resolution";
   import { chooseDomain, domainFromStats, viewStats } from "./lib/color/ramp";
   import { createMap, type MapHandle } from "./lib/map/map";
@@ -38,8 +39,18 @@
   const base = resolveDataBase(location.search, import.meta.env.VITE_DATA_BASE, location.href);
   const engine = new Engine();
 
+  // an old h3-db link (Caddy 302s /h3-db/?<query> to ?legacy=<query>): map it to the hash state
+  // once, then drop ?legacy= from the address bar so the page URL is a normal obis-hex link
+  const legacy = legacyQuery(location.search);
+  const fromLegacy = legacy ? legacyToState(legacy) : null;
+  if (fromLegacy) {
+    const keep = location.search.replace(/^\?/, "").split(/&?legacy=/)[0];
+    history.replaceState(null, "", `${location.pathname}${keep ? `?${keep}` : ""}${formatHash(fromLegacy.state)}`);
+  }
+
   // state ----
-  let st = $state<AppState>(parseHash(location.hash));
+  let st = $state<AppState>(fromLegacy?.state ?? parseHash(location.hash));
+  let legacyNotice = $state(fromLegacy?.notice ?? "");
   let health = $state<"probing" | "ok" | "down">("probing");
   let healthError = $state("");
   let release = $state.raw<ReleaseJson | null>(null);
@@ -255,6 +266,12 @@
       <h1>OBIS hex</h1>
       <p class="sub">Biodiversity indicators on H3 hexagons, computed from Parquet in your browser.</p>
     </header>
+    {#if legacyNotice}
+      <div class="banner notice" role="status">
+        {legacyNotice}
+        <button class="close" aria-label="dismiss" onclick={() => (legacyNotice = "")}>×</button>
+      </div>
+    {/if}
     {#if health === "down"}
       <div class="banner" role="alert">
         Data release unavailable: {healthError}<br /><small>{base}</small>

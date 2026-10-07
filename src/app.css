@@ -51,6 +51,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .seg button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .banner { background: #7a2b2b; color: #fff; padding: 8px; border-radius: 4px; margin-bottom: 10px; font-size: 12px; word-break: break-all; }
+.banner.notice { background: #2b4f7a; word-break: normal; position: relative; padding-right: 24px; }
+.banner .close { position: absolute; top: 2px; right: 4px; background: none; border: 0; color: inherit; font-size: 16px; cursor: pointer; }
 
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 12px; }
 .panel table { border-collapse: collapse; width: 100%; margin-top: 4px; }
