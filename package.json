@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "size-budget": "node scripts/size-budget.mjs",
-    "dev:local": "VITE_DATA_BASE=/obis-hex/local-data/ vite"
+    "dev:local": "VITE_DATA_BASE=/obis-hex/local-data/ vite",
+    "figures": "node scripts/figures.mjs"
   },
   "dependencies": {
     "@deck.gl/core": "9.4.0",
