@@ -25,6 +25,7 @@
     "@duckdb/duckdb-wasm": "1.32.0",
     "@marinebon/ui": "github:marinebon/ui#v0.1.0",
     "h3-js": "4.4.0",
+    "html-to-image": "1.11.13",
     "maplibre-gl": "^6.10.0"
   },
   "devDependencies": {

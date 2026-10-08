@@ -25,7 +25,9 @@ export const RUNTIME_WORKER_BUDGET_BYTES = 150 * 1024;
 
 // substrings that must never appear in the static graph: the duckdb-wasm bundle's own module and
 // asset names (found in its JS chunk). Not plain "duckdb": the footer names "DuckDB-WASM" as prose.
-export const FORBIDDEN_LAZY_MARKERS = ["duckdb-browser", "duckdb-mvp", "duckdb-eh"];
+// "fontEmbedCSS" is html-to-image's (the feedback screenshot, 0.5.0): an option name that survives
+// minification and appears in no other dependency, so a static import of it fails the build.
+export const FORBIDDEN_LAZY_MARKERS = ["duckdb-browser", "duckdb-mvp", "duckdb-eh", "fontEmbedCSS"];
 
 /**
  * Walk a Vite manifest from `entryKey`, following only STATIC `imports` (never `dynamicImports`),
