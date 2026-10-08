@@ -1,7 +1,7 @@
 {
   "name": "obis-hex",
   "private": true,
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "OBIS biodiversity indicators on H3 hexagons, computed from Parquet in the browser",
   "license": "MIT",
   "type": "module",
@@ -26,7 +26,8 @@
     "@marinebon/ui": "github:marinebon/ui#v0.1.0",
     "h3-js": "4.4.0",
     "html-to-image": "1.11.13",
-    "maplibre-gl": "^6.10.0"
+    "maplibre-gl": "^6.10.0",
+    "pmtiles": "^4.5.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.0",

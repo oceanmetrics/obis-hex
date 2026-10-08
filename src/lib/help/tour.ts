@@ -38,7 +38,7 @@ export const TOUR_STOPS: TourStop[] = [
     target: tabSel("place"),
     tab: "place",
     title: "② Place & scale",
-    text: "Go to a sea or a sanctuary, set the hexagon size and the decade, or turn the flat map into a globe.",
+    text: "Go to a sea or a sanctuary (a sanctuary is outlined on the map), set the hexagon size and the decade, or turn the flat map into a globe.",
   },
   {
     id: "indicator",

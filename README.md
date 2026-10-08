@@ -29,7 +29,7 @@ the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-a
   class and order (from `taxon_groups.parquet`, most records first, record counts on a log bar, common
   names for the groups people look for), and **Any taxon (WoRMS)**: the children of any WoRMS AphiaID,
   computed live by the h3t subtree service (see below; the one layer not in the static release).
-  ② **Place & scale**: go to a sea or sanctuary, hexagon size (auto from zoom, the Shiny app's
+  ② **Place & scale**: go to a sea or sanctuary (a sanctuary, reserve or EEZ is outlined on the map, see "Place outline"), hexagon size (auto from zoom, the Shiny app's
   mapping capped at 7, or 5 with a decade on a release layer; or pinned), the period, flat or globe.
   ③ **Indicator**: ES(50), species richness, Shannon H′, Simpson Σp², records, each with a line of
   meaning; *More options*: ramp domain (whole release / loaded hexagons), fill opacity, basemap labels.
@@ -64,6 +64,7 @@ default and after the keys above (tested):
 | `x` | the selected hexagon (H3 index); lights the Cell pill | none |
 | `xo=1` | the Cell pane open | folded |
 | `b=0` | basemap labels off | on |
+| `pl` | the outlined gazetteer place (`NMS:MBNMS`, `MRGID:8439`, `PSGID:939`; 0.5.2) | none |
 
 No key was renamed, so no alias is needed; with no `t=` the theme is `?theme=`, then the stored kit
 choice, then dark (the old default).
@@ -224,6 +225,38 @@ re-applied on every style load (a theme swap replaces the style); no separate Ma
 was needed. Cells with no value (ES(50) where n < 50) are transparent, so over the dark basemap's
 land they read as near-black, as in the Shiny app.
 
+## Place outline
+
+Choosing a sanctuary, reserve or EEZ in **Place & scale** outlines its polygon on the map and fits the
+map to it (`fitBounds` on the preset's `bbox`, `maxZoom` 10); choosing a sea or ocean clears the outline
+and flies to its camera. The 20 places of the [Ocean Metrics
+gazetteer](https://storage.oceanmetrics.io/gazetteer/) have a preset (`place_id` and `bbox` in
+`src/lib/view/regions.ts`): the 18 NOAA sanctuaries and monuments (`NMS:*`; Papahānaumokuākea spans the
+antimeridian, so it keeps its camera and has no `bbox`), Tortugas Ecological Reserve (`PSGID:939`) and the
+Pitcairn EEZ (`MRGID:8439`). Seas and oceans have no gazetteer feature. The selection is the URL key
+`pl=<place_id>` (`AppState.place`), so a link reproduces it and the picker shows it.
+
+- **Source**: `https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer/places/places.pmtiles`,
+  layer `places` (`place_id`, `name`, `gazetteer`, `area_km2`), read by range requests through the
+  `pmtiles` protocol (`pmtiles` 4.5, the same as erddap-places). The bucket URL is used, not
+  `storage.oceanmetrics.io`: that host answers a 302 without `Access-Control-Allow-Origin`, which browsers
+  reject before following, so range requests through it fail (status 0). The bucket answers 206 with
+  `Access-Control-Allow-Origin: *` and exposes `Content-Range`.
+- **Why a second map.** deck.gl draws the hexagons on its own canvas above every MapLibre layer, and an
+  interleaved deck does not run on MapLibre 6 (deck 9.4 reads `map.transform`, gone in 6, and throws on
+  every frame). An outline layer on the main map therefore sat under the 85% opaque hexagons and was
+  barely visible. `createOutlineMap()` (`src/lib/map/map.ts`) stacks a second, transparent MapLibre map
+  (no basemap, `pointer-events: none`) above deck, follows the main camera (centre, zoom, bearing, pitch,
+  padding) on every `move` and `resize`, and draws two line layers filtered by
+  `["==", ["get", "place_id"], <id>]` (a 2.5 px line over a 5 px casing). Its style never changes, so a
+  basemap swap needs nothing re-added; the theme only recolours the lines (white on dark, the kit's
+  `--facet-place` navy on light) and the projection (globe or flat) is mirrored. `.map` is
+  `isolation: isolate` so the outline and deck stay below the Controls and Cell panes. The PNG export
+  draws the outline canvas too.
+- **Attribution**: the tiles' metadata credits NOAA ONMS, MarineRegions.org and ProtectedSeas (license
+  CC-BY-4.0); the outline map has no attribution control of its own, so the main map's control carries
+  that credit as a custom attribution next to OBIS's.
+
 ## Legacy URLs
 
 `app.marinesensitivity.org/h3-db/?<bookmark>` is meant to 302 to
@@ -292,7 +325,7 @@ Measured at 0.3.0 (2026-10-08):
 
 | | gzip | budget |
 |---|---|---|
-| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) | 650 KB |
+| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) | 650 KB |
 | runtime worker (MapLibre's) | 140.2 KB | 150 KB |
 | fonts and images (the kit's nine woff2 faces and the MBON wordmark; 0.4.0) | 538.1 KB raw | 600 KB |
 | DuckDB-WASM (lazy: JS chunk 45 KB, wasm ~7.8 MB) | not counted | must stay lazy |
@@ -305,12 +338,15 @@ globe toggle, legacy links) added 4 KB and 0.3.0 (the WoRMS taxon search and sub
 6.5 KB of CSS (gzip), within the 650 KB budget. The kit's self-hosted fonts and wordmark are in the
 static graph as assets; they are already compressed, never parsed as script and fetched per face on
 use, so they got their own 600 KB budget (`FONT_IMAGE_BUDGET_BYTES`) instead of a raise of the code
-budget. 0.5.0 (welcome card, tour, Help modals, feedback bubble) added 6.3 KB; the feedback dialog and
+budget. 0.5.2 (the place outline) added 9.2 KB, almost all of it `pmtiles` and its `fflate`; 3.2 KB of headroom remain. 0.5.0 (welcome card, tour, Help modals, feedback bubble) added 6.3 KB; the feedback dialog and
 `html-to-image` are a dynamic `import()`, and `fontEmbedCSS` (an html-to-image identifier) is a
 forbidden marker in the static graph, like DuckDB's bundle names.
 
 ## Versions
 
+- **0.5.2**: the selected sanctuary is outlined on the map from the Ocean Metrics gazetteer (PMTiles),
+  and the map fits to it. New URL key `pl=<place_id>` (`AppState.place`); 17 more place presets (all
+  18 NOAA sanctuaries and monuments, Tortugas, Pitcairn EEZ); new dependency `pmtiles`. See "Place outline".
 - **0.5.1**: the map opens on the globe (`proj` default `globe`; `g=flat` is the only value written,
   see "URL"). The footer, About, Data sources and "Cite this data" state the data build date, the
   UTC day of `release.json` `built_at` (`OBIS 2026-07-28 · data 2026-10-07 · release v20260728 ·
@@ -327,7 +363,7 @@ push and pull request, and on `main` deploys the same `dist/` to GitHub Pages (A
 `@duckdb/duckdb-wasm` 1.32.0 exactly (the atlas's spike S1: 1.33 dev builds are broken), deck.gl
 9.4.0 (`@deck.gl/core`, `layers`, `geo-layers`, `mapbox`), `h3-js` 4.4.0, `maplibre-gl` ^6.10.0
 (5.x has an unpatched critical XSS advisory), Svelte ^5.57, Vite ^8.3, vitest ^5, `playwright`
-1.63.0 (dev, figures only), `html-to-image` 1.11.13 exactly (the feedback screenshot; the same
+1.63.0 (dev, figures only), `pmtiles` ^4.5.0 (the gazetteer outline), `html-to-image` 1.11.13 exactly (the feedback screenshot; the same
 version MarineSensitivity/atlas and CalCOFI explore use).
 
 ## License

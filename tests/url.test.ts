@@ -23,6 +23,7 @@ describe("URL hash state", () => {
       cell: "832830fffffffff",
       cellOpen: true,
       labels: false,
+      place: "NMS:MBNMS",
     };
     expect(parseHash(formatHash(s))).toEqual(s);
   });
@@ -120,7 +121,7 @@ describe("layout keys (0.4.0 MBON re-layout)", () => {
     }
   });
   it("writes the layout keys only when they differ from the default, after the eight view keys", () => {
-    expect(formatHash(DEFAULT_STATE)).not.toMatch(/[&#](g|k|cc|tc|x|xo|b)=/);
+    expect(formatHash(DEFAULT_STATE)).not.toMatch(/[&#](g|k|cc|tc|x|xo|b|pl)=/);
     const h = formatHash({ ...DEFAULT_STATE, tab: "indicator", ctlFolded: true, cell: "8a2a1072b59ffff", labels: false });
     expect(h.endsWith("&k=indicator&cc=1&x=8a2a1072b59ffff&b=0")).toBe(true);
   });
@@ -133,11 +134,21 @@ describe("layout keys (0.4.0 MBON re-layout)", () => {
       { cell: "8a2a1072b59ffff" },
       { cellOpen: true },
       { labels: false },
+      { place: "NMS:FKNMS" },
+      { place: "MRGID:8439" },
+      { place: "PSGID:939" },
     ];
     for (const c of cases) {
       const s = { ...DEFAULT_STATE, ...c };
       expect(parseHash(formatHash(s)), JSON.stringify(c)).toEqual(s);
     }
+  });
+  it("pl= is written last, only when a place is set, and an unknown id is dropped", () => {
+    const h = formatHash({ ...DEFAULT_STATE, labels: false, place: "NMS:MBNMS" });
+    expect(h.endsWith("&b=0&pl=NMS:MBNMS")).toBe(true);
+    expect(formatHash(DEFAULT_STATE)).not.toContain("pl=");
+    for (const bad of ["pl=", "pl=MBNMS", "pl=XYZ:1", "pl=NMS:", "pl=NMS:a'b", "pl=NMS:" + "A".repeat(40)])
+      expect(parseHash("#" + bad).place, bad).toBeNull();
   });
   it("junk layout values fall back to defaults", () => {
     const s = parseHash("#k=nope&cc=yes&tc=2&x=zz12&xo=true&b=off");

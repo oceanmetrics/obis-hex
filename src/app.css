@@ -18,7 +18,7 @@ body { background: var(--bg-page); }
 .title-band .msg { color: var(--warn); font: var(--type-small); }
 .title-band a { font: var(--type-small); }
 .stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
-.map { position: absolute; inset: 0; }
+.map { position: absolute; inset: 0; isolation: isolate; } /* the gazetteer outline map (z 3) and deck (z 2) stay below the panes */
 .mbon-footer { flex: none; border-top: 1px solid var(--border); background: var(--bg-surface); }
 
 /* the map's own buttons: zoom (MapLibre) and globe / flat, one column at the top right */

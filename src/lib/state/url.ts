@@ -13,6 +13,7 @@
 //   x=<h3>                    the selected cell (lights the Cell pill)
 //   xo=1                      the Cell pane open
 //   b=0                       basemap labels off
+//   pl=<place_id>             the outlined gazetteer place (0.5.2), e.g. pl=NMS:MBNMS
 import { isIndicator, parseLayerKey, layerKey, type Indicator } from "../data/layers";
 import { RES_MAX } from "./resolution";
 
@@ -23,9 +24,12 @@ export const TABS = ["taxon", "place", "indicator", "share"] as const;
 export type Tab = (typeof TABS)[number];
 
 /** the hash keys of the layout state, written only when not at their default */
-export const LAYOUT_KEYS = ["k", "cc", "tc", "x", "xo", "b"] as const;
+export const LAYOUT_KEYS = ["k", "cc", "tc", "x", "xo", "b", "pl"] as const;
 
 const H3_RE = /^[0-9a-f]{15}$/;
+/** an Ocean Metrics gazetteer place id: `NMS:MBNMS`, `MRGID:8439`, `PSGID:939`. It goes into a map
+ * filter only, never into SQL; anything else in a link is dropped. */
+export const PLACE_ID_RE = /^(NMS|MRGID|PSGID):[A-Za-z0-9_-]{1,16}$/;
 
 export interface AppState {
   indicator: Indicator;
@@ -57,6 +61,8 @@ export interface AppState {
   cellOpen: boolean;
   /** basemap labels (place names) drawn over the hexagons */
   labels: boolean;
+  /** the gazetteer place whose polygon is outlined on the map; null = none */
+  place: string | null;
 }
 
 export const DEFAULT_STATE: AppState = {
@@ -78,6 +84,7 @@ export const DEFAULT_STATE: AppState = {
   cell: null,
   cellOpen: false,
   labels: true,
+  place: null,
 };
 
 const round = (x: number, d: number) => Number(x.toFixed(d));
@@ -103,7 +110,8 @@ export function formatHash(s: AppState): string {
   if (s.cell) p.push(["x", s.cell]);
   if (s.cellOpen) p.push(["xo", "1"]);
   if (!s.labels) p.push(["b", "0"]);
-  return `#${p.map(([k, v]) => `${k}=${k === "l" ? v : encodeURIComponent(v).replace(/%2C/g, ",")}`).join("&")}`;
+  if (s.place) p.push(["pl", s.place]);
+  return `#${p.map(([k, v]) => `${k}=${k === "l" ? v : encodeURIComponent(v).replace(/%2C/g, ",").replace(/%3A/g, ":")}`).join("&")}`;
 }
 
 /** raw (undecoded) hash params; `l` is decoded by parseLayerKey, the rest here. */
@@ -171,6 +179,8 @@ export function parseHash(hash: string): AppState {
   if (H3_RE.test(x)) s.cell = x;
   s.cellOpen = p.get("xo") === "1";
   if (p.get("b") === "0") s.labels = false;
+  const pl = p.get("pl") ?? "";
+  if (PLACE_ID_RE.test(pl)) s.place = pl;
   return s;
 }
 

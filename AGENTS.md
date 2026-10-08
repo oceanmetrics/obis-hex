@@ -54,7 +54,7 @@ Conventions for anyone (human or agent) changing obis-hex.
 | `src/lib/view/sentence.ts` | the title sentence parts and text, hexagon areas, the coverage line |
 | `src/lib/data/taxa.ts` | the taxon picker rows (groups, counts, common names, log bars) |
 | `src/lib/release/decades.ts` | records per decade (sum of `n` of the res-1 decade files), brush ⇄ decade |
-| `src/lib/view/regions.ts` | the "go to" regions |
+| `src/lib/view/regions.ts` | the "go to" regions; those with a `place_id` (and `bbox`) are outlined from the gazetteer |
 | `src/lib/export/` | the title-stamped PNG, the Cite this data text (release citation + OBIS line) |
 | `src/lib/help/` | tour stops and keys (`tour.ts`), `?tour=`/`?modal=` and the welcome views (`start.ts`), shortcuts (`keys.ts`), data sources (`sources.ts`) |
 | `src/lib/feedback/` | the GitHub issue URL and report text (`issue.ts`), mark-up drawing (`annotate.ts`), the lazy screenshot (`capture.ts`) |
@@ -71,7 +71,7 @@ Conventions for anyone (human or agent) changing obis-hex.
 | `src/lib/release/manifest.ts` | `files.parquet` index and lookup |
 | `src/lib/engine/` | DuckDB-WASM engine (`engine.ts`), bundles, SQL builders |
 | `src/lib/color/ramp.ts` | viridis, p02–p98 domain, quantiles, view stats |
-| `src/lib/map/` | MapLibre + deck.gl overlay (flat or globe projection); `H3HexagonLayer` builder |
+| `src/lib/map/` | MapLibre + deck.gl overlay (flat or globe projection); `H3HexagonLayer` builder; the gazetteer outline map above deck (`createOutlineMap`) |
 | `scripts/size-budget*.mjs` | the bundle-size gate (from MarineSensitivity/atlas) |
 | `scripts/figures.mjs` | `npm run figures`: paper 2's figures from URL states → `figures/figA_*.png` |
 | `docs/redirect.md` | the Caddy redirect for app.marinesensitivity.org/h3-db and the legacy mapping table |

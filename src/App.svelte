@@ -375,6 +375,9 @@
   $effect(() => {
     handle?.setLabels(st.labels);
   });
+  $effect(() => {
+    handle?.setPlace(st.place);
+  });
   // keep the map's centre above the Time strip (laptop and wider; on a phone the panes are sheets)
   $effect(() => {
     const bottom = wideEnough ? (st.timeFolded ? 56 : stripH + 64) : 0;
@@ -545,7 +548,18 @@
   }
 
   function goTo(r: Region) {
-    handle?.map.flyTo({ center: [r.lon, r.lat], zoom: r.zoom, essential: true });
+    // a gazetteer place is outlined, and the map fits its bounds so the whole outline is in view;
+    // a sea or ocean clears the outline and flies to its camera
+    st.place = r.place_id ?? null;
+    if (r.bbox)
+      handle?.map.fitBounds(
+        [
+          [r.bbox[0], r.bbox[1]],
+          [r.bbox[2], r.bbox[3]],
+        ],
+        { padding: 60, maxZoom: 10, essential: true },
+      );
+    else handle?.map.flyTo({ center: [r.lon, r.lat], zoom: r.zoom, essential: true });
   }
 
   async function savePng() {
@@ -692,6 +706,7 @@
       theme: st.theme,
       projection: st.proj,
       labels: st.labels,
+      place: st.place,
       center: [st.lon, st.lat],
       zoom: st.zoom,
       onView: (v) => {
@@ -780,7 +795,7 @@
         <PeriodPicker bind:st allowed={decadesAllowed} reason={decadeReason} onpicked={close} />
       {/snippet}
       {#snippet place(close)}
-        <PlacePanel note={placeNote()} maxHeight="12rem" ongo={(r) => { goTo(r); close(); }} />
+        <PlacePanel note={placeNote()} placeId={st.place} maxHeight="12rem" ongo={(r) => { goTo(r); close(); }} />
       {/snippet}
       {#snippet scale()}
         <ScalePanel bind:st autoRes={autoResNow} {res} {resMax} />
@@ -834,7 +849,7 @@
           <TaxonPanel bind:st {items} {h3tBase} {h3tHealth} {aphiaInfo} {aphiaAccepted} />
         {:else if id === "place"}
           <div class="tab">
-            <PlacePanel note={placeNote()} maxHeight="9rem" ongo={goTo} />
+            <PlacePanel note={placeNote()} placeId={st.place} maxHeight="9rem" ongo={goTo} />
             <div>
               <span class="mbon-label">hexagon size</span>
               <ScalePanel bind:st autoRes={autoResNow} {res} {resMax} />
