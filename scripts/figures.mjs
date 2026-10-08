@@ -40,7 +40,7 @@ const browser = await chromium.launch({
 try {
   for (const f of FIGURES) {
     const page = await browser.newPage({ viewport: { width: 1512, height: 798 } });
-    await page.goto(`${APP}${f.hash}`);
+    await page.goto(`${APP}?tour=off${f.hash}`); // no welcome card or tour in a figure
     // the shell flags data-ready once the release, the view's partition(s) and the layer are in
     await page.waitForSelector('.shell[data-ready="1"]', { timeout: 120_000 });
     await page.waitForLoadState("networkidle"); // basemap tiles and fonts
