@@ -90,12 +90,20 @@ describe("coverage line (the ES(50) caveat)", () => {
 });
 
 describe("cite", () => {
-  it("credits OBIS with the snapshot, obisindicators with the release, and the link", () => {
-    const t = citeText({ release: "v20260728", snapshot: "2026-07-28", obisindicators: "0.7.1", appVersion: "0.4.0", url: "https://oceanmetrics.io/obis-hex/#i=es" });
-    expect(t).toContain("OBIS (2026)");
-    expect(t).toContain("(snapshot 2026-07-28)");
-    expect(t).toContain("obisindicators 0.7.1");
-    expect(t).toContain("H3 release v20260728");
-    expect(t.split("\n")[2]).toBe("Map: OBIS hex v0.4.0 (Ocean Metrics for MBON), https://oceanmetrics.io/obis-hex/#i=es");
+  it("the release citation (snapshot, obisindicators, app version, link), then OBIS's own line", () => {
+    const t = citeText({ release: "v20260728", snapshot: "2026-07-28", obisindicators: "0.7.1", appVersion: "0.5.0", url: "https://oceanmetrics.io/obis-hex/#i=es" });
+    const [rel, blank, obis] = t.split("\n");
+    expect(rel).toBe(
+      "Ocean Metrics for MBON (2026). OBIS hex v0.5.0: OBIS biodiversity indicators on H3 hexagons, release v20260728 " +
+        "(OBIS snapshot 2026-07-28; indicators by obisindicators 0.7.1 (https://github.com/marinebon/obisindicators)). https://oceanmetrics.io/obis-hex/#i=es",
+    );
+    expect(blank).toBe("");
+    expect(obis).toBe("OBIS (2026) Ocean Biodiversity Information System. Intergovernmental Oceanographic Commission of UNESCO. https://obis.org");
+  });
+  it("before release.json loads: no release, no snapshot, the fallback year", () => {
+    const t = citeText({ appVersion: "0.5.0", url: "u" });
+    expect(t).toContain("OBIS hex v0.5.0: OBIS biodiversity indicators on H3 hexagons (indicators by obisindicators (https://");
+    expect(t).not.toContain("release v");
+    expect(t).toContain("OBIS (2026) Ocean");
   });
 });

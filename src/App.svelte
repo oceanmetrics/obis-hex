@@ -1,7 +1,7 @@
 <script lang="ts">
   // the app shell. ALL view state is `st` (an AppState), mirrored to the URL hash both ways;
   // everything else here is derived from it or is loaded data (release, manifest, partition).
-  import { onMount, untrack } from "svelte";
+  import { onMount, untrack, type Component } from "svelte";
   import type { PickingInfo } from "@deck.gl/core";
   import { Engine, type Partition } from "./lib/engine/engine";
   import { displaySql, displayUnionSql } from "./lib/engine/sql";
@@ -47,6 +47,7 @@
     applyTheme,
     Controls,
     Footer,
+    Button,
     Header,
     Kbd,
     Legend,
@@ -55,8 +56,17 @@
     Pane,
     storedTheme,
     TimeStrip,
+    toggleTheme,
     urlTheme,
   } from "@marinebon/ui";
+  import Modal from "./components/Modal.svelte";
+  import Welcome from "./components/Welcome.svelte";
+  import Tour from "./components/Tour.svelte";
+  import { onLoad, parseHelpQuery, startState, WELCOME_SEEN_KEY, type HelpModal, type StartView } from "./lib/help/start";
+  import { shortcutFor, SHORTCUTS } from "./lib/help/keys";
+  import { sources } from "./lib/help/sources";
+  import type { TourStop } from "./lib/help/tour";
+  import type { FeedbackKind } from "./lib/feedback/issue";
   import CellPanel, { type SelectedCell } from "./components/CellPanel.svelte";
   import TitleSentence from "./components/TitleSentence.svelte";
   import TaxonPanel from "./components/TaxonPanel.svelte";
@@ -79,7 +89,7 @@
   } from "./lib/release/decades";
   import type { Region } from "./lib/view/regions";
   import { downloadCanvas, pngName, stampPng } from "./lib/export/png";
-  import { citeText } from "./lib/export/cite";
+  import { citeText, citeYear } from "./lib/export/cite";
   import { RES_DECADE_MAX } from "./lib/state/resolution";
   import { VIRIDIS } from "./lib/color/ramp";
 
@@ -107,8 +117,28 @@
   if (!fromLegacy && !hashHas(location.hash, "cc") && matchMedia("(max-width: 640px)").matches)
     initial.ctlFolded = true;
   let st = $state<AppState>(initial);
-  let helpOpen = $state(false);
-  let helpTopic = $state<"about" | "sources" | "keys">("about");
+  // help, the tour and feedback ----
+  const GUIDE_URL = "https://marinebon.org/tools/obis-hex/";
+  const helpQuery = parseHelpQuery(location.search);
+  const seen = (() => {
+    try {
+      return localStorage.getItem(WELCOME_SEEN_KEY) === "1";
+    } catch {
+      return true;
+    }
+  })();
+  const atLoad = onLoad(helpQuery, seen);
+  let helpModal = $state<HelpModal | null>(atLoad.modal);
+  let helpModalOpen = $state(atLoad.modal !== null);
+  let welcomeOpen = $state(atLoad.welcome);
+  let tourIndex = $state(-1);
+  let tourWas: { tab: Tab; ctlFolded: boolean; timeFolded: boolean } | null = null;
+  let FeedbackDialog = $state.raw<Component<any> | null>(null);
+  let fbOpen = $state(false);
+  let fbKind = $state<FeedbackKind>("feedback");
+  let fbImage = $state.raw<HTMLCanvasElement | null>(null);
+  let fbBusy = $state(false);
+  let shellEl: HTMLDivElement;
   let wide = $state(matchMedia("(min-width: 1600px)").matches);
   let wideEnough = $state(!matchMedia("(max-width: 640px)").matches);
   let legacyNotice = $state(fromLegacy?.notice ?? "");
@@ -543,6 +573,94 @@
   const gradient = VIRIDIS.map((c) => `rgb(${c.join(",")})`);
   const tabs = TABS.map((id) => ({ id, label: { taxon: "Taxon", place: "Place & scale", indicator: "Indicator", share: "Share" }[id] }));
 
+  // help, the tour and feedback ----
+  function showModal(m: HelpModal) {
+    helpModal = m;
+    helpModalOpen = true;
+  }
+  function closeWelcome() {
+    welcomeOpen = false;
+    try {
+      localStorage.setItem(WELCOME_SEEN_KEY, "1");
+    } catch {
+      /* storage blocked: the card shows again next time */
+    }
+  }
+  const startHref = (v: StartView) => formatHash(startState(st, v));
+  function startTour() {
+    if (welcomeOpen) closeWelcome();
+    helpModalOpen = false;
+    if (tourIndex < 0) tourWas = { tab: st.tab, ctlFolded: st.ctlFolded, timeFolded: st.timeFolded };
+    tourIndex = 0;
+  }
+  function tourStepped(s: TourStop) {
+    if (s.tab) {
+      st.ctlFolded = false;
+      st.tab = s.tab;
+    }
+    if (s.time) st.timeFolded = false;
+  }
+  function tourClosed() {
+    if (tourWas) Object.assign(st, tourWas);
+    tourWas = null;
+  }
+  async function openFeedback(kind: FeedbackKind) {
+    if (fbBusy) return;
+    fbBusy = true;
+    if (welcomeOpen) closeWelcome();
+    tourIndex = -1;
+    try {
+      const [mod, cap] = await Promise.all([import("./components/FeedbackDialog.svelte"), import("./lib/feedback/capture")]);
+      let image: HTMLCanvasElement | null = null;
+      try {
+        image = await cap.captureView(shellEl, handle ? { el: mapEl, snapshot: () => handle!.snapshot() } : null);
+      } catch {
+        image = null;
+      }
+      FeedbackDialog = mod.default;
+      fbKind = kind;
+      fbImage = image;
+      fbOpen = true;
+    } finally {
+      fbBusy = false;
+    }
+  }
+  const feedbackReport = () => ({
+    url: permalink,
+    appVersion: __APP_VERSION__,
+    release: release?.release ?? null,
+    snapshot: release?.obis_snapshot ?? null,
+    viewport: `${innerWidth}×${innerHeight}`,
+    theme: st.theme,
+    sentence: titleText,
+  });
+  function onKey(e: KeyboardEvent) {
+    const t = e.target as HTMLElement | null;
+    const busy = tourIndex >= 0 || fbOpen || helpModalOpen || !!document.querySelector("dialog[open]");
+    const s = shortcutFor(
+      { key: e.key, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey, targetTag: t?.tagName, targetEditable: !!t?.isContentEditable },
+      { busy },
+    );
+    if (!s) return;
+    if (s.kind === "escape") {
+      if (welcomeOpen) closeWelcome();
+      return; // menus, chips, panes, dialogs and the tour close themselves
+    }
+    // MapLibre zooms with +/- itself when the map has focus
+    if (s.kind === "zoom" && t?.closest(".maplibregl-map")) return;
+    e.preventDefault();
+    if (s.kind === "tour") startTour();
+    else if (s.kind === "theme") toggleTheme();
+    else if (s.kind === "projection") st.proj = st.proj === "globe" ? "flat" : "globe";
+    else if (s.kind === "tab") {
+      st.ctlFolded = false;
+      st.tab = s.tab;
+    } else if (s.kind === "zoom") {
+      if (s.by > 0) handle?.map.zoomIn();
+      else handle?.map.zoomOut();
+    }
+  }
+
   // map interaction ----
   function cellAt(info: PickingInfo): SelectedCell | null {
     const p = partition;
@@ -587,6 +705,8 @@
     });
     bounds = handle.bounds();
     window.addEventListener("hashchange", onHashChange);
+    window.addEventListener("keydown", onKey);
+    if (atLoad.tour) startTour();
     const offTheme = onThemeChange((t) => {
       if (t !== st.theme) st.theme = t;
     });
@@ -619,6 +739,7 @@
 
     return () => {
       window.removeEventListener("hashchange", onHashChange);
+      window.removeEventListener("keydown", onKey);
       offTheme();
       mq.removeEventListener("change", onMq);
       mqPhone.removeEventListener("change", onMq);
@@ -628,15 +749,23 @@
   });
 </script>
 
-<div class="shell" data-ready={partition && !loading && (health === "ok" || live) && (live || !statsQ || statsSettled === statsQ) ? "1" : "0"}>
+<div class="shell" bind:this={shellEl} data-ready={partition && !loading && (health === "ok" || live) && (live || !statsQ || statsSettled === statsQ) ? "1" : "0"}>
   <Header appName="OBIS hex" tagline="biodiversity indicators on H3 hexagons, from Parquet in your browser" appHref="./">
     {#snippet help(close)}
-      <button type="button" onclick={() => { helpTopic = "about"; helpOpen = true; close(); }}>About</button>
-      <button type="button" onclick={() => { helpTopic = "sources"; helpOpen = true; close(); }}>Data sources</button>
-      <button type="button" onclick={() => { helpTopic = "keys"; helpOpen = true; close(); }}>Keyboard</button>
+      <button type="button" onclick={() => { close(); startTour(); }}>Take the tour <span class="kbd-hint">?</span></button>
+      <a href={GUIDE_URL} target="_blank" rel="noopener" onclick={close}>Guide ↗</a>
+      <button type="button" onclick={() => { close(); tourIndex = -1; welcomeOpen = true; }}>Start here</button>
+      <button type="button" onclick={() => { close(); showModal("about"); }}>About</button>
+      <button type="button" onclick={() => { close(); showModal("sources"); }}>Data sources and attribution</button>
+      <button type="button" onclick={() => { close(); showModal("keys"); }}>Keyboard</button>
       <a href="https://github.com/ioos/marine_life_data_network/tree/main/eov_taxonomy" target="_blank" rel="noopener" onclick={close}>What defines each EOV? ↗</a>
-      <button type="button" disabled title="coming">Guide (coming)</button>
-      <button type="button" disabled title="coming">Take the tour (coming)</button>
+      <button type="button" onclick={() => { close(); openFeedback("product"); }}>Register a product</button>
+    {/snippet}
+    {#snippet feedback()}
+      <button type="button" class="fb-bubble" aria-label="Send feedback" title="Send feedback (a screenshot of this view, your note)"
+        aria-busy={fbBusy} disabled={fbBusy} onclick={() => openFeedback("feedback")}>
+        <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M3.5 4.5h13a1 1 0 0 1 1 1v7.5a1 1 0 0 1-1 1H9l-3.6 2.8v-2.8H3.5a1 1 0 0 1-1-1V5.5a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" /></svg>
+      </button>
     {/snippet}
   </Header>
 
@@ -759,48 +888,14 @@
       {/snippet}
     </Controls>
 
-    <Pane title="cell" id="cell" anchor="top-right" offset={{ x: 0, y: 128 }} width={260}
+    <Pane title="cell" id="cell" class="cell-pane" anchor="top-right" offset={{ x: 0, y: 128 }} width={260}
       pillLabel={selected ? "cell ●" : "cell"}
       bind:collapsed={() => !st.cellOpen, (v) => (st.cellOpen = !v)}>
       <CellPanel cell={selected} indicator={st.indicator} p50={vstats ? vstats.p50 : null} />
     </Pane>
 
-    {#if helpOpen}
-      <Pane title={helpTopic === "about" ? "about" : helpTopic === "sources" ? "data sources" : "keyboard"} id="help"
-        anchor="top-right" offset={{ x: 280, y: 0 }} width={380} closable collapsible={false} bind:open={helpOpen}>
-        <div class="help">
-          {#if helpTopic === "about"}
-            <p><b>OBIS hex</b> maps biodiversity indicators (ES(50), species richness, Shannon, Simpson, records) of
-              OBIS occurrence records on H3 hexagons. The indicators are precomputed by
-              <a href="https://github.com/marinebon/obisindicators" target="_blank" rel="noopener">obisindicators</a> into a
-              Parquet release; your browser reads only the files the view needs, with DuckDB-WASM, and nothing runs on a server
-              (except the live <i>Any taxon (WoRMS)</i> layer).</p>
-            <p>The title is the control: click a bold word to change it. Every view is a link.</p>
-            <p>A product of the <a href="https://marinebon.org" target="_blank" rel="noopener">Marine Biodiversity Observation Network</a>,
-              built by <a href="https://oceanmetrics.io" target="_blank" rel="noopener">Ocean Metrics</a>. v{__APP_VERSION__}.</p>
-          {:else if helpTopic === "sources"}
-            <ul>
-              <li><a href="https://obis.org" target="_blank" rel="noopener">OBIS</a>, the Ocean Biodiversity Information System:
-                occurrence records{release?.obis_snapshot ? `, snapshot ${release.obis_snapshot}` : ""}; release {release?.release ?? "…"}.</li>
-              <li><a href="https://www.marinespecies.org" target="_blank" rel="noopener">WoRMS</a>, the World Register of Marine
-                Species: the taxonomy behind taxon groups, EOVs and the live AphiaID layer.</li>
-              <li>Essential Ocean Variables as defined by the
-                <a href="https://github.com/ioos/marine_life_data_network/tree/main/eov_taxonomy" target="_blank" rel="noopener">IOOS Marine
-                Life Data Network</a>: root AphiaIDs per EOV, every descendant included
-                (<a href="https://github.com/ioos/marine_life_data_network/tree/main/eov_taxonomy" target="_blank" rel="noopener">what defines each EOV?</a>).</li>
-              <li><a href="https://h3geo.org" target="_blank" rel="noopener">H3</a> hexagons; basemap © CARTO, © OpenStreetMap contributors.</li>
-            </ul>
-          {:else}
-            <ul>
-              <li><Kbd>Tab</Kbd> moves between controls; <Kbd>←</Kbd> <Kbd>→</Kbd> move between the Controls tabs.</li>
-              <li>In a title chip, <Kbd>↑</Kbd> <Kbd>↓</Kbd> <Kbd>Enter</Kbd> pick; <Kbd>Esc</Kbd> closes.</li>
-              <li>On a pane title, arrow keys move it, <Kbd>Home</Kbd> sends it home; <Kbd>Esc</Kbd> restores an expanded pane.</li>
-              <li>On the Time strip, <Kbd>←</Kbd> <Kbd>→</Kbd> move the decade; <Kbd>Esc</Kbd> returns to all years.</li>
-              <li>The map: drag to pan, scroll or <Kbd>+</Kbd> <Kbd>−</Kbd> to zoom.</li>
-            </ul>
-          {/if}
-        </div>
-      </Pane>
+    {#if welcomeOpen}
+      <Welcome href={startHref} onclose={closeWelcome} ontour={startTour} />
     {/if}
 
     <TimeStrip title="records per decade" domain={DECADE_DOMAIN} bind:height={stripH} minHeight={48} maxHeight={240}
@@ -812,6 +907,65 @@
       {/snippet}
     </TimeStrip>
   </main>
+
+  <Modal bind:open={helpModalOpen} title={helpModal === "about" ? "about" : helpModal === "sources" ? "data sources and attribution" : "keyboard"}
+    width={helpModal === "keys" ? "28rem" : "38rem"}>
+    <div class="help">
+      {#if helpModal === "about"}
+        <p><b>OBIS hex</b> maps biodiversity indicators (ES(50), species richness, Shannon, Simpson, records) of
+          OBIS occurrence records on H3 hexagons. The indicators are precomputed by
+          <a href="https://github.com/marinebon/obisindicators" target="_blank" rel="noopener">obisindicators</a>{release?.obisindicators_version ? ` ${release.obisindicators_version}` : ""}
+          into a Parquet release; your browser reads only the files the view needs, with DuckDB-WASM, and nothing runs on a
+          server (except the live <i>Any taxon (WoRMS)</i> layer).</p>
+        <p>Data: the OBIS snapshot of {release?.obis_snapshot ?? "…"}, release {release?.release ?? "…"}. The title is the
+          control: click a bold word to change it. Every view is a link.</p>
+        <p>A product of the <a href="https://marinebon.org" target="_blank" rel="noopener">Marine Biodiversity Observation Network</a>
+          (MBON), built by <a href="https://oceanmetrics.io" target="_blank" rel="noopener">Ocean Metrics</a>. Code: MIT licence,
+          <a href="https://github.com/oceanmetrics/obis-hex" target="_blank" rel="noopener">github.com/oceanmetrics/obis-hex</a>,
+          v{__APP_VERSION__}. Data: OBIS's terms (see <button type="button" class="linkish" onclick={() => showModal("sources")}>data sources</button>).</p>
+        <span class="mbon-label">cite this data</span>
+        <pre class="cite">{cite}</pre>
+        <Button variant="quiet" size="sm" onclick={() => navigator.clipboard?.writeText(cite)}>Copy citation</Button>
+      {:else if helpModal === "sources"}
+        <table class="sources">
+          <tbody>
+            {#each sources({ snapshot: release?.obis_snapshot ?? null, release: release?.release ?? null, year: citeYear(release?.obis_snapshot) }) as src (src.name)}
+              <tr>
+                <th scope="row"><a href={src.href} target="_blank" rel="noopener">{src.name}</a></th>
+                <td>
+                  {src.role}
+                  {#if src.citation}<div class="c">{src.citation}</div>{/if}
+                  {#if src.licence || src.doi}<div class="l">{#if src.licence}Licence: {src.licence}{/if}{#if src.doi}{src.licence ? " · " : ""}DOI <a href="https://doi.org/{src.doi}" target="_blank" rel="noopener">{src.doi}</a>{/if}</div>{/if}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      {:else}
+        <table class="keys">
+          <tbody>
+            {#each SHORTCUTS as k (k.what)}
+              <tr><td>{#each k.keys as key, i (key)}{#if i}&nbsp;{/if}<Kbd>{key}</Kbd>{/each}</td><td>{k.what}</td></tr>
+            {/each}
+          </tbody>
+        </table>
+        <ul>
+          <li><Kbd>Tab</Kbd> moves between controls; <Kbd>←</Kbd> <Kbd>→</Kbd> move between the Controls tabs.</li>
+          <li>In a title chip, <Kbd>↑</Kbd> <Kbd>↓</Kbd> <Kbd>Enter</Kbd> pick; <Kbd>Esc</Kbd> closes.</li>
+          <li>On a pane title, arrow keys move it, <Kbd>Home</Kbd> sends it home.</li>
+          <li>On the Time strip, <Kbd>←</Kbd> <Kbd>→</Kbd> move the decade; <Kbd>Esc</Kbd> returns to all years.</li>
+          <li>In the tour, <Kbd>←</Kbd> <Kbd>→</Kbd> move, <Kbd>Esc</Kbd> ends it.</li>
+        </ul>
+      {/if}
+    </div>
+  </Modal>
+
+  <Tour bind:index={tourIndex} onstep={tourStepped} onclose={tourClosed} />
+
+  {#if FeedbackDialog}
+    <FeedbackDialog bind:open={fbOpen} kind={fbKind} image={fbImage} report={feedbackReport}
+      filename={`obis-hex_${fbKind}.png`} />
+  {/if}
 
   <Footer sourceHref="https://github.com/oceanmetrics/obis-hex">
     {#snippet release()}{#if releaseInfo}OBIS {releaseInfo.obis_snapshot ?? ""} · release {releaseInfo.release} · v{__APP_VERSION__}{:else}v{__APP_VERSION__}{/if}{/snippet}

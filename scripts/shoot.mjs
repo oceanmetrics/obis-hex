@@ -1,7 +1,9 @@
 // the UI assessment's capture script (erddap-places/docs/ui-assessment/shoot.mjs, "oh"), moved here
 // for the after set: the same four states, dark and light, at phone 390×844, laptop 1280×800 and
 // projector 1920×1080, into docs/ui-assessment/after/. Ready = `.shell[data-ready="1"]` and the
-// footer's timing, then network idle + 2 s (as before).
+// footer's timing, then network idle + 2 s (as before). Every state but the first-visit ones opens
+// with `?tour=off`, so no welcome card or tour lands in it (0.5.0); `welcome_*` is a first visit and
+// `tour-stop-1_*` is `?tour=on`.
 //
 //   node scripts/shoot.mjs                                          # the deployed app
 //   OBIS_HEX_URL=http://localhost:4173/obis-hex/ node scripts/shoot.mjs   # a local preview
@@ -45,11 +47,14 @@ async function shot({ url, file, vp, after }) {
   await ctx.close();
 }
 
+const Q = `${OH}?tour=off`;
 const states = [
-  ["initial", (t) => (t === "dark" ? OH : `${OH}#t=light`)],
-  ["eov-seabirds_res3", (t) => `${OH}#i=es&l=eov:seabirds&p=all&r=3&o=0.85&t=${t}&d=release&g=flat&c=-20,5,1.4`],
-  ["aves_res7_monterey", (t) => `${OH}#i=es&l=taxon:class:Aves&p=all&r=7&o=0.85&t=${t}&d=release&g=flat&c=-122.05,36.75,9.2`],
-  ["eov-seabirds_globe", (t) => `${OH}#i=es&l=eov:seabirds&p=all&r=2&o=0.85&t=${t}&d=release&g=globe&c=-150,20,1.6`],
+  ["initial", (t) => (t === "dark" ? Q : `${Q}#t=light`)],
+  ["welcome", (t) => `${OH}#t=${t}`],
+  ["tour-stop-1", (t) => `${OH}?tour=on#t=${t}`],
+  ["eov-seabirds_res3", (t) => `${Q}#i=es&l=eov:seabirds&p=all&r=3&o=0.85&t=${t}&d=release&g=flat&c=-20,5,1.4`],
+  ["aves_res7_monterey", (t) => `${Q}#i=es&l=taxon:class:Aves&p=all&r=7&o=0.85&t=${t}&d=release&g=flat&c=-122.05,36.75,9.2`],
+  ["eov-seabirds_globe", (t) => `${Q}#i=es&l=eov:seabirds&p=all&r=2&o=0.85&t=${t}&d=release&g=globe&c=-150,20,1.6`],
 ];
 for (const [name, u] of states) {
   if (only && only !== name) continue;
@@ -58,7 +63,7 @@ for (const [name, u] of states) {
 }
 // two extra states: the taxon chip open, and the Share tab with SQL & timing open (laptop, light)
 if (!only || only === "extras") {
-  const sea = `${OH}#i=es&l=eov:seabirds&p=all&r=3&o=0.85&t=light&d=release&g=flat&c=-20,5,1.4`;
+  const sea = `${Q}#i=es&l=eov:seabirds&p=all&r=3&o=0.85&t=light&d=release&g=flat&c=-20,5,1.4`;
   await shot({ url: sea, vp: "laptop", file: `${OUT}/chip-taxon_light_laptop.png`, after: async (p) => {
     await p.locator(".view-title .chip").first().click();
     await p.waitForTimeout(400);

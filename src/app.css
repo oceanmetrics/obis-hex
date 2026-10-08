@@ -96,3 +96,22 @@ table.stats td:last-child { text-align: right; font-family: var(--font-mono); fo
   .title-band .legend .mbon-label { display: none; }
   .mbon-footer { padding: var(--space-1) var(--space-3); font-size: 11px; }
 }
+
+/* help, the tour and feedback */
+.fb-bubble {
+  display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-body); cursor: pointer;
+}
+.fb-bubble:hover { background: var(--control-hover); color: var(--text-strong); }
+.fb-bubble:disabled { opacity: 0.5; cursor: progress; }
+.kbd-hint { margin-left: auto; padding-left: var(--space-3); font: var(--text-xs) / 1 var(--font-mono); color: var(--text-muted); }
+.help .cite { white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-xs) / 1.45 var(--font-mono); background: var(--bg-tint); border-radius: var(--radius-sm); padding: var(--space-2); margin: var(--space-1) 0 var(--space-2); }
+.help .mbon-label { display: block; margin-top: var(--space-3); }
+.help .linkish { border: 0; padding: 0; background: none; color: var(--link); font: inherit; cursor: pointer; }
+.help table { border-collapse: collapse; width: 100%; margin-bottom: var(--space-3); }
+.help table th, .help table td { text-align: left; vertical-align: top; padding: var(--space-2) var(--space-2) var(--space-2) 0; }
+.help table.sources tr + tr th, .help table.sources tr + tr td { border-top: 1px solid var(--divider); }
+.help table.sources th { width: 9rem; font-weight: var(--fw-semibold); }
+.help table .c { margin-top: 2px; font: var(--text-xs) / 1.4 var(--font-mono); color: var(--text-strong); }
+.help table .l { margin-top: 2px; font: var(--text-xs) / 1.4 var(--font-sans); color: var(--text-muted); }
+.help table.keys td:first-child { white-space: nowrap; width: 7rem; }

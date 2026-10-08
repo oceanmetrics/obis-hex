@@ -33,6 +33,14 @@ Conventions for anyone (human or agent) changing obis-hex.
 - **The title sentence is the view's caption.** `sentenceParts()`/`sentenceText()`
   (`src/lib/view/sentence.ts`) build it; the PNG stamp and `npm run figures` read it. Keep the ES(50)
   coverage line ("n of N hexagons have ≥ 50 records") visible whenever the indicator is ES(50).
+- **Help, the tour and feedback stay in step with the layout.** A control that moves or is renamed
+  updates its tour stop (`TOUR_STOPS` in `src/lib/help/tour.ts`: order, selectors, words) and the
+  Keyboard list (`SHORTCUTS`). `?tour=`/`?modal=` are query switches, never AppState. Screenshots and
+  figures open with `?tour=off`. Feedback has no server: the GitHub issue URL (`issueUrl()`, kept
+  under 7,500 characters), the clipboard and a PNG; never collect an email address.
+- **html-to-image stays lazy** (pinned 1.11.13 exactly). Only `src/lib/feedback/capture.ts` imports
+  it, and it and `FeedbackDialog.svelte` are reached only via `import()` in `App.svelte`
+  (`tests/help.test.ts` and the size budget's `fontEmbedCSS` marker check this).
 - **Logic in plain `.ts`, tested.** Components only wire. Every rule (resolution mapping, ramp domain,
   manifest lookup, hash codec) has a vitest test with a small fixture; a bug fix adds a named
   regression test. `npm test`, `npm run check`, `npx tsc --noEmit` and the size budget must be green.
@@ -47,7 +55,10 @@ Conventions for anyone (human or agent) changing obis-hex.
 | `src/lib/data/taxa.ts` | the taxon picker rows (groups, counts, common names, log bars) |
 | `src/lib/release/decades.ts` | records per decade (sum of `n` of the res-1 decade files), brush ⇄ decade |
 | `src/lib/view/regions.ts` | the "go to" regions |
-| `src/lib/export/` | the title-stamped PNG, the Cite text |
+| `src/lib/export/` | the title-stamped PNG, the Cite this data text (release citation + OBIS line) |
+| `src/lib/help/` | tour stops and keys (`tour.ts`), `?tour=`/`?modal=` and the welcome views (`start.ts`), shortcuts (`keys.ts`), data sources (`sources.ts`) |
+| `src/lib/feedback/` | the GitHub issue URL and report text (`issue.ts`), mark-up drawing (`annotate.ts`), the lazy screenshot (`capture.ts`) |
+| `src/components/Welcome, Tour, Modal, FeedbackDialog` | the welcome card, the tour ring and card, the native-dialog modal, the feedback dialog (lazy) |
 | `scripts/shoot.mjs` | the UI assessment capture → `docs/ui-assessment/after/` |
 | `src/lib/state/url.ts` | AppState, hash codec, defaults |
 | `src/lib/state/resolution.ts` | zoom → res (Shiny app's breaks), caps 7 / 5 with a decade |

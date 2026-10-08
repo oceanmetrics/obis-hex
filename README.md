@@ -14,9 +14,8 @@ builds each cell from its H3 index.
 An MBON product built on the [`@marinebon/ui`](https://github.com/marinebon/ui) kit (v0.1.0): the map is
 the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-assessment.md`).
 
-- **Header**: the MBON wordmark, *OBIS hex* and its tagline, **Help ▾** (About; Data sources: the OBIS
-  snapshot, WoRMS, the IOOS Marine Life Data Network EOV definitions; Keyboard; "what defines each
-  EOV?"; guide and tour placeholders) and the theme toggle. The theme is the kit's (stored as
+- **Header**: the MBON wordmark, *OBIS hex* and its tagline, **Help ▾** (see "Help, the tour and
+  feedback"), the feedback bubble and the theme toggle. The theme is the kit's (stored as
   `mbon-theme`) and drives the CARTO basemap (dark-matter / positron); a link's `t=` still wins.
 - **The title sentence is the controls**, in the order dataset → place → method:
   "**Seabirds** (EOV), **all years** (OBIS 2026-07-28), **worldwide**, **~12,400 km² hexagons** (res 3):
@@ -34,8 +33,8 @@ the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-a
   mapping capped at 7, or 5 with a decade on a release layer; or pinned), the period, flat or globe.
   ③ **Indicator**: ES(50), species richness, Shannon H′, Simpson Σp², records, each with a line of
   meaning; *More options*: ramp domain (whole release / loaded hexagons), fill opacity, basemap labels.
-  ④ **Share**: Download PNG (the title, scale, release and link stamped on it), Copy link, Cite
-  (OBIS + obisindicators + release), and *SQL & timing* (the partition path, bytes, cells, ms,
+  ④ **Share**: Download PNG (the title, scale, release and link stamped on it), Copy link, *Cite this
+  data* (the release citation, then OBIS's own line), and *SQL & timing* (the partition path, bytes, cells, ms,
   partitions fetched/cached, the stats table and the copyable SQL or request URL).
 - **Time strip** (bottom): records per decade for the current layer (the sum of `n` over the res-1
   decade files, one query per layer after the map has loaded, ~90–150 KB once); brushing a decade
@@ -67,7 +66,46 @@ above, so every older link opens the same view and formats back to the same stri
 No key was renamed, so no alias is needed; with no `t=` the theme is `?theme=`, then the stored kit
 choice, then dark (the old default).
 
+Query parameters (before the `#`) are switches, not view state: `?tour=off` (no welcome card, no
+tour: screenshots and figures use it), `?tour=on` (replay the tour), `?modal=about|sources|keys` (open
+that Help modal), `?theme=`, `?data=` and `?h3t=` (see below), `?legacy=` (see "Legacy URLs").
+
 Not here: custom SQL, year ranges finer than decades, report export.
+
+## Help, the tour and feedback
+
+Modelled on calcofi.io/explore ("Help, the tour and feedback"). Logic in `src/lib/help/` and
+`src/lib/feedback/` (tested in `tests/help.test.ts`); components `Welcome`, `Tour`, `Modal`,
+`FeedbackDialog`.
+
+- **Welcome card** (*Start here*): on a first visit (localStorage `obis-hex-welcome`), a small card over
+  the map with two doors, *Show me seabird diversity* (seabirds EOV, res 3, worldwide) and *Zoom into a
+  sanctuary* (class Aves, res 7, Monterey Bay), and three worked questions (hard corals by records;
+  sea turtles in the 2010s; ES(50) in the Caribbean). Each is a link to a URL state; the theme and
+  layout are kept.
+- **Tour**: *Help ▾ → Take the tour*, the `?` key, or `?tour=on`. No library: a ring around one part
+  of the page and a card with Skip / Back / Next (Done on the last). Nine stops in the page's order:
+  the sentence → ① Taxon → ② Place & scale → ③ Indicator → the legend and the coverage line → the Time
+  strip → the Cell pill → ④ Share → Help. Keys: ← → (PageUp/PageDown) move, Home/End jump, Esc ends;
+  focus sits on Next and returns where it was. A stop on a Controls tab opens that tab (and unfolds
+  Controls); the tab and folds are restored when the tour ends. Animated only without
+  `prefers-reduced-motion`. The stops' words are `TOUR_STOPS` in `src/lib/help/tour.ts`.
+- **Help ▾**: Take the tour · Guide ↗ (<https://marinebon.org/tools/obis-hex/>) · Start here · About
+  (what the app is, the OBIS snapshot and release, the obisindicators version, who built it, the
+  licence, *Cite this data*) · Data sources and attribution (OBIS with its citation and licence terms,
+  WoRMS with its DOI, the IOOS MLDN EOV definitions, CARTO, the software credits; also
+  `?modal=sources`) · Keyboard · What defines each EOV? ↗ · Register a product.
+- **Keyboard**: `?` tour, `t` theme, `g` globe/flat, `1`–`4` Controls tabs, `+`/`-` zoom, `Esc`
+  closes. Never while typing or with Ctrl/Alt/Meta held; only Esc while a dialog or the tour is open.
+- **Feedback** (the speech bubble in the header): captures the view (the title band and the stage:
+  map, sentence, panes; the header and footer are cropped, the map is composited from its own WebGL
+  canvases), lets you draw a rectangle or an arrow or place text on it, and sends nothing itself:
+  *Open a GitHub issue* opens `github.com/oceanmetrics/obis-hex/issues/new` prefilled (title, note,
+  view URL, sentence, release, app version, viewport, theme; label `feedback`) and copies the image to
+  the clipboard to paste in; *Copy report* puts the same text and the image on the clipboard;
+  *Download PNG*. The body is cut to keep the URL under 7,500 characters (the note is trimmed, never
+  the details). No email address is asked for. *Register a product* is the same dialog titled "I
+  built something with this" (label `product`). The dialog and `html-to-image` load only on click.
 
 ## Any taxon (WoRMS): the subtree service
 
@@ -226,6 +264,7 @@ npm run check        # svelte-check
 npm run build && npm run size-budget
 npm run figures      # paper figures (Playwright), see "Figures"
 node scripts/shoot.mjs   # the UI assessment states at phone/laptop/projector → docs/ui-assessment/after/
+                         # (welcome_* and tour-stop-1_* are the first-visit card and the tour's first stop)
 ```
 
 A page URL can also point at another release with `?data=https://…/` (https or a same-origin path).
@@ -251,10 +290,11 @@ Measured at 0.3.0 (2026-10-08):
 
 | | gzip | budget |
 |---|---|---|
-| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) | 650 KB |
+| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) | 650 KB |
 | runtime worker (MapLibre's) | 140.2 KB | 150 KB |
 | fonts and images (the kit's nine woff2 faces and the MBON wordmark; 0.4.0) | 538.1 KB raw | 600 KB |
 | DuckDB-WASM (lazy: JS chunk 45 KB, wasm ~7.8 MB) | not counted | must stay lazy |
+| feedback dialog + html-to-image (lazy, 0.5.0) | 3.9 KB + 5.3 KB, not counted | must stay lazy |
 
 The atlas budget is 450 KB; deck.gl and h3-js add roughly 300 KB, hence 650 KB here. The viewport
 code (`polygonToCells`, `gridDisk`) uses the h3-js already in the bundle for deck.gl, so 0.2.0 (viewport loading,
@@ -263,7 +303,9 @@ globe toggle, legacy links) added 4 KB and 0.3.0 (the WoRMS taxon search and sub
 6.5 KB of CSS (gzip), within the 650 KB budget. The kit's self-hosted fonts and wordmark are in the
 static graph as assets; they are already compressed, never parsed as script and fetched per face on
 use, so they got their own 600 KB budget (`FONT_IMAGE_BUDGET_BYTES`) instead of a raise of the code
-budget.
+budget. 0.5.0 (welcome card, tour, Help modals, feedback bubble) added 6.3 KB; the feedback dialog and
+`html-to-image` are a dynamic `import()`, and `fontEmbedCSS` (an html-to-image identifier) is a
+forbidden marker in the static graph, like DuckDB's bundle names.
 
 ## Deploy
 
@@ -276,7 +318,8 @@ push and pull request, and on `main` deploys the same `dist/` to GitHub Pages (A
 `@duckdb/duckdb-wasm` 1.32.0 exactly (the atlas's spike S1: 1.33 dev builds are broken), deck.gl
 9.4.0 (`@deck.gl/core`, `layers`, `geo-layers`, `mapbox`), `h3-js` 4.4.0, `maplibre-gl` ^6.10.0
 (5.x has an unpatched critical XSS advisory), Svelte ^5.57, Vite ^8.3, vitest ^5, `playwright`
-1.63.0 (dev, figures only).
+1.63.0 (dev, figures only), `html-to-image` 1.11.13 exactly (the feedback screenshot; the same
+version MarineSensitivity/atlas and CalCOFI explore use).
 
 ## License
 
