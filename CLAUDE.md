@@ -41,8 +41,8 @@ Playwright needs `npx playwright install chromium` once on a fresh machine.
    `?legacy=` via `legacy.ts`) and written back with `formatHash` in an `$effect`. Everything below is
    `$derived` from `st` plus loaded data; components receive values and callbacks, they hold no
    view state.
-2. **Release.** `release.ts` resolves the data base URL (`?data=` → `VITE_DATA_BASE` → public S3),
-   then loads `release.json`, `files.parquet` (into `Manifest`), `stats.parquet` and
+2. **Release.** `release.ts` resolves the data base URL (async: `?data=` → `VITE_DATA_BASE` → the
+   `base` in S3 `obis-h3/latest.json` → the `PUBLIC_DATA_BASE` constant), then loads `release.json`, `files.parquet` (into `Manifest`), `stats.parquet` and
    `taxon_groups.parquet` through the engine once per page.
 3. **Plan.** `st.layer` → `LayerSel` (`parseLayerKey`); zoom/res mode/decade → requested res
    (`effectiveRes`); `planView(manifest, sel, decade, res, bounds)` returns either one whole file or
@@ -69,4 +69,7 @@ The engine takes an injectable `createDb`: the browser path lazy-imports `bundle
   (`0.5.0: …`, `UI: …`, `docs: …`). There is no NEWS.md.
 - `__APP_VERSION__` (from `package.json`, via `vite.config.ts` `define`) is what the footer, About
   and feedback report show.
+- Feedback sends to the shared Ocean Metrics Apps Script when `VITE_FEEDBACK_URL` is set (runbook:
+  erddap-places `docs/feedback.md`); the email is optional, Sheet and mail only, never the issue.
+  Without an endpoint, or after a failed send, the GitHub issue, Copy report and Download PNG remain.
 - Vite `base` is `/obis-hex/`; local URLs and `OBIS_HEX_URL` need that path.

@@ -1,7 +1,8 @@
-// feedback without a server: the prefilled GitHub "new issue" URL and the same report as plain text
-// for the clipboard (after MarineSensitivity/atlas src/lib/feedback/issueUrl.ts). No email address
-// is collected; the image never goes into the URL (GitHub cannot take one there): the dialog copies
-// it to the clipboard and asks the visitor to paste it into the issue.
+// the fallback when no endpoint is configured or the POST fails: the prefilled GitHub "new issue" URL
+// and the same report as plain text for the clipboard (after MarineSensitivity/atlas
+// src/lib/feedback/issueUrl.ts). The optional email never enters it (payload.ts sends it to the Sheet
+// and the mail only); the image never goes into the URL (GitHub cannot take one there): the dialog
+// copies it to the clipboard and asks the visitor to paste it into the issue.
 export const ISSUE_BASE = "https://github.com/oceanmetrics/obis-hex/issues/new";
 /** GitHub truncates a new-issue URL around 8 KB; stay well under it */
 export const MAX_ISSUE_URL_LENGTH = 7500;
@@ -11,7 +12,7 @@ export type FeedbackKind = "feedback" | "product";
 export interface FeedbackReport {
   kind: FeedbackKind;
   note: string;
-  /** the view's link (the URL hash is the view) */
+  /** the view's link (the URL hash is the view); empty when the "include a link" box is unticked */
   url: string;
   appVersion: string;
   release: string | null;
@@ -35,7 +36,7 @@ export function issueTitle(r: FeedbackReport): string {
 
 function details(r: FeedbackReport): string {
   return [
-    `- View: ${r.url}`,
+    ...(r.url ? [`- View: ${r.url}`] : []),
     ...(r.sentence ? [`- Showing: ${r.sentence}`] : []),
     `- Release: ${r.release ?? "unknown"}${r.snapshot ? ` (OBIS snapshot ${r.snapshot})` : ""}`,
     `- App: obis-hex v${r.appVersion}`,

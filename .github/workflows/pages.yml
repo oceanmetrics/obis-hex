@@ -29,6 +29,8 @@ jobs:
       - run: npm run check
       - run: npm test
       - run: npm run build
+        env:
+          VITE_FEEDBACK_URL: ${{ vars.VITE_FEEDBACK_URL }}   # Apps Script /exec; empty = no Send button (erddap-places docs/feedback.md)
       - run: npm run size-budget
       - if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@v3

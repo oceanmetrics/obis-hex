@@ -17,6 +17,7 @@
   import {
     loadMeta,
     probeRelease,
+    dataBaseOverride,
     resolveDataBase,
     statsSql,
     type ReleaseJson,
@@ -93,7 +94,9 @@
   import { RES_DECADE_MAX } from "./lib/state/resolution";
   import { VIRIDIS } from "./lib/color/ramp";
 
-  const base = resolveDataBase(location.search, import.meta.env.VITE_DATA_BASE, location.href);
+  // the data base: ?data= / VITE_DATA_BASE are known at once; otherwise latest.json is fetched at
+  // startup (resolveDataBase), and nothing reads `base` before `meta` exists, which is set after it
+  let base = $state(dataBaseOverride(location.search, import.meta.env.VITE_DATA_BASE, location.href) ?? "");
   const h3tBase = resolveH3tBase(location.search, import.meta.env.VITE_H3T_BASE, location.href);
   const engine = new Engine();
 
@@ -738,6 +741,7 @@
     probeH3t(h3tBase).then((ok) => (h3tHealth = ok ? "ok" : "down"));
 
     (async () => {
+      if (!base) base = await resolveDataBase(location.search, import.meta.env.VITE_DATA_BASE, location.href);
       const probe = await probeRelease(base);
       if (!probe.ok) {
         health = "down";

@@ -5,9 +5,14 @@ import { lit } from "../engine/sql";
 import { statsKey, type Indicator, type LayerSel } from "../data/layers";
 import { Manifest, type FileRow } from "./manifest";
 
-/** the published release (path-style S3 URL: the bucket answers CORS with Range this way). */
+/** the fallback release (path-style S3 URL: the bucket answers CORS with Range this way), used when
+ * latest.json cannot be read. The monthly refresh moves `latest.json`, not this constant. */
 export const PUBLIC_DATA_BASE =
   "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3/v20260728/";
+
+/** the pointer the monthly refresh writes (max-age=300): `{ release, base, obis_snapshot, built_at }` */
+export const LATEST_URL =
+  "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3/latest.json";
 
 export interface ReleaseJson {
   release: string;
@@ -21,31 +26,80 @@ export interface ReleaseJson {
   [k: string]: unknown;
 }
 
+/** an https URL (or a same-origin path when `allowPath`) as a base ending in "/", or null when it is
+ * not acceptable (http:, relative, credentials, a query or a fragment). A relative value is resolved
+ * against `pageHref` because DuckDB-WASM needs absolute URLs. */
+function normalizeBase(cand: string | null | undefined, pageHref: string, allowPath: boolean): string | null {
+  if (!cand) return null;
+  if (!/^https:\/\//.test(cand) && !(allowPath && cand.startsWith("/"))) return null;
+  let url: URL;
+  try {
+    url = new URL(cand, pageHref);
+  } catch {
+    return null;
+  }
+  if (url.username || url.password || url.search || url.hash) return null;
+  return url.href.endsWith("/") ? url.href : `${url.href}/`;
+}
+
 /**
- * The data base URL, normalized to end in "/": `?data=` on the page URL wins (an https URL, or a
- * same-origin path starting with "/"), then the build-time `VITE_DATA_BASE`, then the public
- * release. A relative value is resolved against `pageHref` because DuckDB-WASM needs absolute URLs.
+ * The explicit data base, or null: `?data=` on the page URL wins (an https URL, or a same-origin
+ * path starting with "/"), then the build-time `VITE_DATA_BASE`. Synchronous, so a pinned release
+ * or the local demo store never waits on the network.
  */
-export function resolveDataBase(
+export function dataBaseOverride(
   search: string,
   envBase: string | undefined,
   pageHref: string,
-): string {
-  const fromQuery = new URLSearchParams(search).get("data");
-  for (const cand of [fromQuery, envBase]) {
-    if (!cand) continue;
-    if (!/^https:\/\//.test(cand) && !cand.startsWith("/")) continue;
-    let url: URL;
-    try {
-      url = new URL(cand, pageHref);
-    } catch {
-      continue;
-    }
-    if (url.username || url.password || url.search || url.hash) continue;
-    const href = url.href;
-    return href.endsWith("/") ? href : `${href}/`;
+): string | null {
+  for (const cand of [new URLSearchParams(search).get("data"), envBase]) {
+    const b = normalizeBase(cand, pageHref, true);
+    if (b) return b;
   }
-  return PUBLIC_DATA_BASE;
+  return null;
+}
+
+/** the `base` of latest.json, or null on any failure (404 before the first monthly refresh, network
+ * error, timeout, bad JSON, a base that is not an https URL). Never throws. */
+export async function fetchLatestBase(
+  opts: { fetchImpl?: typeof fetch; timeoutMs?: number; url?: string } = {},
+): Promise<string | null> {
+  const f = opts.fetchImpl ?? fetch.bind(globalThis);
+  const ctl = new AbortController();
+  // the abort rejects a fetch that honours the signal; the race covers one that does not
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((res) => {
+    timer = setTimeout(() => {
+      ctl.abort();
+      res(null);
+    }, opts.timeoutMs ?? 3000);
+  });
+  const read = (async () => {
+    const res = await f(opts.url ?? LATEST_URL, { signal: ctl.signal, cache: "no-cache" });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { base?: unknown };
+    return typeof json?.base === "string" ? normalizeBase(json.base, LATEST_URL, false) : null;
+  })().catch(() => null);
+  try {
+    return await Promise.race([read, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * The data base URL, normalized to end in "/": `?data=` → `VITE_DATA_BASE` (both via
+ * {@link dataBaseOverride}) → the `base` in latest.json (fetched with `cache: "no-cache"` and a 3 s
+ * timeout) → {@link PUBLIC_DATA_BASE}. A new monthly release therefore needs no redeploy; any
+ * failure to read latest.json falls back to the constant.
+ */
+export async function resolveDataBase(
+  search: string,
+  envBase: string | undefined,
+  pageHref: string,
+  opts: { fetchImpl?: typeof fetch; timeoutMs?: number } = {},
+): Promise<string> {
+  return dataBaseOverride(search, envBase, pageHref) ?? (await fetchLatestBase(opts)) ?? PUBLIC_DATA_BASE;
 }
 
 /** the health probe and release loader in one: GET release.json with a timeout. Never throws;

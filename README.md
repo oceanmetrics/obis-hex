@@ -11,7 +11,7 @@ builds each cell from its H3 index.
 
 ## What it shows
 
-An MBON product built on the [`@marinebon/ui`](https://github.com/marinebon/ui) kit (v0.1.0): the map is
+An MBON product built on the [`@marinebon/ui`](https://github.com/marinebon/ui) kit (v0.3.0): the map is
 the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-assessment.md`).
 
 - **Header**: the MBON wordmark, *OBIS hex* and its tagline, **Help ▾** (see "Help, the tour and
@@ -100,15 +100,29 @@ Modelled on calcofi.io/explore ("Help, the tour and feedback"). Logic in `src/li
   `?modal=sources`) · Keyboard · What defines each EOV? ↗ · Register a product.
 - **Keyboard**: `?` tour, `t` theme, `g` globe/flat, `1`–`4` Controls tabs, `+`/`-` zoom, `Esc`
   closes. Never while typing or with Ctrl/Alt/Meta held; only Esc while a dialog or the tour is open.
-- **Feedback** (the speech bubble in the header): captures the view (the title band and the stage:
-  map, sentence, panes; the header and footer are cropped, the map is composited from its own WebGL
-  canvases), lets you draw a rectangle or an arrow or place text on it, and sends nothing itself:
-  *Open a GitHub issue* opens `github.com/oceanmetrics/obis-hex/issues/new` prefilled (title, note,
-  view URL, sentence, release, app version, viewport, theme; label `feedback`) and copies the image to
-  the clipboard to paste in; *Copy report* puts the same text and the image on the clipboard;
-  *Download PNG*. The body is cut to keep the URL under 7,500 characters (the note is trimmed, never
-  the details). No email address is asked for. *Register a product* is the same dialog titled "I
-  built something with this" (label `product`). The dialog and `html-to-image` load only on click.
+- **Feedback** (the speech bubble in the header): a note, an optional email ("optional, so we can
+  reply; not published"), a picture of the view (the title band and the stage: map, sentence, panes;
+  the header and footer are cropped, the map is composited from its own WebGL canvases) with a
+  rectangle, arrow and text mark-up in one of three colours (pink by default, yellow, blue:
+  `colors.ts`, the one place a canvas colour is written), and a checkbox "include a link to this
+  view" (on by default; unticked, the `url` key is absent from the payload).
+  - **Send** (shown when an endpoint is configured: `VITE_FEEDBACK_URL`, set as the repo variable of
+    that name and passed to the build in `pages.yml`, or the localStorage key `obis-hex.feedback_url`
+    for a test without a rebuild; `endpoint.ts`): `postFeedback.ts` POSTs `payload.ts`'s body
+    (`app: "obis-hex"`, kind, text, email only when given, url only when ticked, the release id and
+    OBIS snapshot, version, viewport, theme, user agent, the sentence, the image, a honeypot) as
+    `text/plain` to the shared Ocean Metrics Apps Script (runbook: erddap-places `docs/feedback.md`),
+    which writes a Google Sheet row, mails the recipients and opens a GitHub issue labelled with the
+    kind. The email goes to the Sheet and the mail only, never into the issue. States: Sending, Sent,
+    or failed (the message says so and *Open a GitHub issue* appears).
+  - **Fallbacks**, always available: *Open a GitHub issue* (shown when there is no endpoint or after a
+    failed send) opens `github.com/oceanmetrics/obis-hex/issues/new` prefilled (title, note, view URL
+    if ticked, sentence, release, app version, viewport, theme; label `feedback`) and copies the image
+    to the clipboard to paste in; *Copy report* puts the same text and the image on the clipboard;
+    *Download PNG*. The body is cut to keep the URL under 7,500 characters (the note is trimmed, never
+    the details). The email is never in these.
+  *Register a product* is the same dialog titled "I built something with this" (label `product`). The
+  dialog and `html-to-image` load only on click. Tests: `tests/feedback.test.ts`.
 
 ## Any taxon (WoRMS): the subtree service
 
@@ -150,6 +164,21 @@ or `VITE_H3T_BASE` at build time). Code: `src/lib/aphia/h3t.ts`, `src/components
   over the cap, so res 4: 2.3 MB, 180,091 cells, 7.9 s. Repeats come from Varnish (7 days).
 
 ## Data layout (v2)
+
+**Which release the app reads.** `https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3/latest.json`
+is the pointer, written by the monthly refresh (erddap-places `obis-h3.yml`, obisindicators
+`data-raw/refresh_obis_h3.sh`; `max-age=300`):
+`{"release":"vYYYYMMDD","base":"https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3/vYYYYMMDD/","obis_snapshot":"YYYY-MM-DD","built_at":"…"}`.
+At startup `resolveDataBase()` (`src/lib/release/release.ts`, async) takes, in order: `?data=`,
+`VITE_DATA_BASE` (both synchronous), the `base` of `latest.json` (fetched with `cache: "no-cache"`
+and a 3 s timeout; it must be an https URL without credentials), and finally the constant
+`PUBLIC_DATA_BASE` (`v20260728`). Any failure of the fetch (404, network error, timeout, bad JSON)
+falls back to the constant, so the app never waits on, or breaks because of, the pointer. **A new
+release therefore needs no redeploy**: the monthly job writes the new `vYYYYMMDD/` folder, then
+`latest.json`, and the next page load (within about five minutes) reads it; the footer shows the
+release id and the data date. Until the first refresh writes the file the fetch fails (S3 answers 403
+or 404; the browser logs one failed request) and the constant applies. The constant is only a
+fallback: bump it when convenient, not for each release. Tests: `tests/release.test.ts`.
 
 Release `v20260728` at
 `https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3/v20260728/` (written by
@@ -302,7 +331,7 @@ node scripts/shoot.mjs   # the UI assessment states at phone/laptop/projector �
                          # (welcome_* and tour-stop-1_* are the first-visit card and the tour's first stop)
 ```
 
-A page URL can also point at another release with `?data=https://…/` (https or a same-origin path).
+A page URL can also point at another release with `?data=https://…/` (https or a same-origin path), which skips `latest.json`.
 
 To build the local demo release (layout v2) from the South Atlantic demo store, in R with
 obisindicators 0.7.1 on branch `export-parquet`:
@@ -325,11 +354,11 @@ Measured at 0.3.0 (2026-10-08):
 
 | | gzip | budget |
 |---|---|---|
-| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) | 650 KB |
+| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) → 647.7 KB (0.6.0) | 650 KB |
 | runtime worker (MapLibre's) | 140.2 KB | 150 KB |
 | fonts and images (the kit's nine woff2 faces and the MBON wordmark; 0.4.0) | 538.1 KB raw | 600 KB |
 | DuckDB-WASM (lazy: JS chunk 45 KB, wasm ~7.8 MB) | not counted | must stay lazy |
-| feedback dialog + html-to-image (lazy, 0.5.0) | 3.9 KB + 5.3 KB, not counted | must stay lazy |
+| feedback dialog (with the 0.6.0 endpoint, payload and colour code) + html-to-image (lazy, 0.5.0) | 5.3 KB + 5.3 KB, not counted | must stay lazy |
 
 The atlas budget is 450 KB; deck.gl and h3-js add roughly 300 KB, hence 650 KB here. The viewport
 code (`polygonToCells`, `gridDisk`) uses the h3-js already in the bundle for deck.gl, so 0.2.0 (viewport loading,
@@ -338,12 +367,19 @@ globe toggle, legacy links) added 4 KB and 0.3.0 (the WoRMS taxon search and sub
 6.5 KB of CSS (gzip), within the 650 KB budget. The kit's self-hosted fonts and wordmark are in the
 static graph as assets; they are already compressed, never parsed as script and fetched per face on
 use, so they got their own 600 KB budget (`FONT_IMAGE_BUDGET_BYTES`) instead of a raise of the code
-budget. 0.5.2 (the place outline) added 9.2 KB, almost all of it `pmtiles` and its `fflate`; 3.2 KB of headroom remain. 0.5.0 (welcome card, tour, Help modals, feedback bubble) added 6.3 KB; the feedback dialog and
+budget. 0.5.2 (the place outline) added 9.2 KB, almost all of it `pmtiles` and its `fflate`; 3.2 KB of headroom remained. 0.6.0 (the async `latest.json` resolver, the `@marinebon/ui` 0.3.0 bump; the feedback code is lazy) added 0.9 KB, leaving 2.3 KB; the budget is unchanged. 0.5.0 (welcome card, tour, Help modals, feedback bubble) added 6.3 KB; the feedback dialog and
 `html-to-image` are a dynamic `import()`, and `fontEmbedCSS` (an html-to-image identifier) is a
 forbidden marker in the static graph, like DuckDB's bundle names.
 
 ## Versions
 
+- **0.6.0**: `@marinebon/ui` 0.3.0 (the title sentence is the kit's size, 22 px, 28 px large, so
+  the app's own override is gone; chips render at 0.9em; the selected Controls tab is semibold with
+  an accent ring). Feedback goes to the shared Ocean Metrics endpoint when `VITE_FEEDBACK_URL` is set:
+  optional email (Sheet and mail only), "include a link to this view", three mark colours, Send with
+  sending/sent/failed states; the GitHub issue, Copy report and Download PNG remain the fallback. The
+  data release is read from `obis-h3/latest.json` (fallback `v20260728`), so a monthly release needs no
+  redeploy; `resolveDataBase()` is now async (see "Data layout"). Entry 647.7 KB gzip of 650 KB.
 - **0.5.2**: the selected sanctuary is outlined on the map from the Ocean Metrics gazetteer (PMTiles),
   and the map fits to it. New URL key `pl=<place_id>` (`AppState.place`); 17 more place presets (all
   18 NOAA sanctuaries and monuments, Tortugas, Pitcairn EEZ); new dependency `pmtiles`. See "Place outline".

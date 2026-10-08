@@ -7,6 +7,11 @@ Conventions for anyone (human or agent) changing obis-hex.
 - **The URL is the view.** Every piece of view state lives in `AppState` (`src/lib/state/url.ts`)
   and round-trips through the hash. Add a field there, to `formatHash`/`parseHash`, and to
   `tests/url.test.ts` in the same change. Parsing never throws; bad values fall back to defaults.
+- **The release comes from `latest.json`.** `resolveDataBase()` (`src/lib/release/release.ts`, async)
+  takes `?data=`, then `VITE_DATA_BASE` (both synchronous, via `dataBaseOverride()`), then the `base`
+  in `obis-h3/latest.json` (no-cache, 3 s timeout), then the `PUBLIC_DATA_BASE` constant. Any failure
+  of the fetch means the constant, never an error. Nothing may read the data base before it resolves
+  (`App.svelte` sets `base` before `probeRelease`); a new release needs no redeploy.
 - **Files come from the manifest.** A view (layer × period × resolution) resolves through
   `files.parquet` (`Manifest.view()`), never a URL template: one whole file, or (layout v2) the
   parent partitions of a split resolution, of which the app loads those covering the viewport
@@ -24,7 +29,7 @@ Conventions for anyone (human or agent) changing obis-hex.
   every downstream panel treats it like a partition. Never call the service without a bbox at
   res >= 6, keep the request URL's parameter order fixed (it is the cache key, in DuckDB and
   in Varnish), and handle 413 by stepping down a resolution, not by retrying.
-- **The UI is `@marinebon/ui`** (pinned `github:marinebon/ui#v0.1.0`; read its AGENTS.md before adding a
+- **The UI is `@marinebon/ui`** (pinned `github:marinebon/ui#v0.3.0`; read its AGENTS.md before adding a
   control). Use its components and semantic tokens (`--bg-surface`, `--text-body`, …), never a new hex
   value; the pipeline order is taxon (dataset) → place → indicator (method) → share (delivery). A
   control that changes what the map means goes in its Controls tab AND in the title sentence as a
@@ -36,8 +41,14 @@ Conventions for anyone (human or agent) changing obis-hex.
 - **Help, the tour and feedback stay in step with the layout.** A control that moves or is renamed
   updates its tour stop (`TOUR_STOPS` in `src/lib/help/tour.ts`: order, selectors, words) and the
   Keyboard list (`SHORTCUTS`). `?tour=`/`?modal=` are query switches, never AppState. Screenshots and
-  figures open with `?tour=off`. Feedback has no server: the GitHub issue URL (`issueUrl()`, kept
-  under 7,500 characters), the clipboard and a PNG; never collect an email address.
+  figures open with `?tour=off`. Feedback sends to the shared Ocean Metrics Apps Script when
+  `VITE_FEEDBACK_URL` (or the `obis-hex.feedback_url` localStorage override) is set (runbook:
+  erddap-places `docs/feedback.md`); otherwise, or when the POST fails, it falls back to the GitHub
+  issue URL (`issueUrl()`, kept under 7,500 characters), the clipboard and a PNG. The email is
+  optional: Sheet and mail only, never the issue, the issue URL or the clipboard report
+  (`payload.ts` leaves the key out when empty; `FeedbackReport` has no email field). The view link is
+  an opt-out checkbox; unticked, `url` is absent from the payload. Mark colours live only in
+  `feedback/colors.ts`.
 - **html-to-image stays lazy** (pinned 1.11.13 exactly). Only `src/lib/feedback/capture.ts` imports
   it, and it and `FeedbackDialog.svelte` are reached only via `import()` in `App.svelte`
   (`tests/help.test.ts` and the size budget's `fontEmbedCSS` marker check this).
@@ -57,7 +68,7 @@ Conventions for anyone (human or agent) changing obis-hex.
 | `src/lib/view/regions.ts` | the "go to" regions; those with a `place_id` (and `bbox`) are outlined from the gazetteer |
 | `src/lib/export/` | the title-stamped PNG, the Cite this data text (release citation + OBIS line) |
 | `src/lib/help/` | tour stops and keys (`tour.ts`), `?tour=`/`?modal=` and the welcome views (`start.ts`), shortcuts (`keys.ts`), data sources (`sources.ts`) |
-| `src/lib/feedback/` | the GitHub issue URL and report text (`issue.ts`), mark-up drawing (`annotate.ts`), the lazy screenshot (`capture.ts`) |
+| `src/lib/feedback/` | the GitHub issue URL and report text (`issue.ts`), mark-up drawing (`annotate.ts`) and colours (`colors.ts`), the endpoint (`endpoint.ts`), POST body (`payload.ts`) and client (`postFeedback.ts`), the lazy screenshot (`capture.ts`) |
 | `src/components/Welcome, Tour, Modal, FeedbackDialog` | the welcome card, the tour ring and card, the native-dialog modal, the feedback dialog (lazy) |
 | `scripts/shoot.mjs` | the UI assessment capture → `docs/ui-assessment/after/` |
 | `src/lib/state/url.ts` | AppState, hash codec, defaults |
@@ -67,7 +78,7 @@ Conventions for anyone (human or agent) changing obis-hex.
 | `src/components/AphiaSearch.svelte` | the debounced WoRMS name search |
 | `src/lib/view/viewport.ts` | viewport → parent cells (h3-js), the view plan and its fallback |
 | `src/lib/data/layers.ts` | indicators, EOVs, `LayerSel`, layer keys, manifest-layer mapping |
-| `src/lib/release/release.ts` | data base URL, `release.json` probe, metadata + stats SQL |
+| `src/lib/release/release.ts` | data base URL (`latest.json` pointer, overrides), `release.json` probe, metadata + stats SQL |
 | `src/lib/release/manifest.ts` | `files.parquet` index and lookup |
 | `src/lib/engine/` | DuckDB-WASM engine (`engine.ts`), bundles, SQL builders |
 | `src/lib/color/ramp.ts` | viridis, p02–p98 domain, quantiles, view stats |
