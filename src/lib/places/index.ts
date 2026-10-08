@@ -7,9 +7,9 @@
 // BOEM Pacific lease ids repeat in the wind leases), which is why a link may carry `pc=<collection>`.
 import { lit } from "../engine/sql";
 
-import { GAZETTEER_BASE, INDEX_URL, LAYERS_URL, OBIS_CREDIT, pmtilesUrl } from "./urls";
+import { GAZETTEER_BASE, INDEX_LAYERS_URL, INDEX_URL, LAYERS_URL, OBIS_CREDIT, directBase, pmtilesUrl } from "./urls";
 
-export { GAZETTEER_BASE, INDEX_URL, LAYERS_URL, OBIS_CREDIT, pmtilesUrl };
+export { GAZETTEER_BASE, INDEX_LAYERS_URL, INDEX_URL, LAYERS_URL, OBIS_CREDIT, directBase, pmtilesUrl };
 
 /** one collection of the manifest */
 export interface PlaceLayer {
@@ -57,8 +57,10 @@ export interface RowSource {
 
 // manifest and index ----
 
-/** the manifest's layers, in its order, with `pmtiles` rewritten to the bucket host */
+/** the manifest's layers, in its order, with `pmtiles` rewritten to the manifest's `base_direct`
+ * (the bucket host; the constant when it is absent or a browser cannot use it, see `directBase`) */
 export function parseLayers(json: unknown): PlaceLayer[] {
+  const base = directBase(json);
   const list = (json as { layers?: unknown })?.layers;
   if (!Array.isArray(list)) throw new Error("gazetteer manifest has no layers");
   return list.map((l: Record<string, unknown>) => ({
@@ -68,7 +70,7 @@ export function parseLayers(json: unknown): PlaceLayer[] {
     place_type: (l.place_type as string | null) ?? null,
     geom_type: String(l.geom_type ?? ""),
     n: Number(l.n ?? 0),
-    pmtiles: pmtilesUrl(String(l.slug)),
+    pmtiles: pmtilesUrl(String(l.slug), base),
     attribution: String(l.attribution ?? ""),
     attribution_html: String(l.attribution_html ?? ""),
     license: String(l.license ?? ""),
@@ -79,7 +81,9 @@ export function parseLayers(json: unknown): PlaceLayer[] {
 }
 
 export async function loadLayers(fetchFn: typeof fetch = fetch): Promise<PlaceLayer[]> {
-  const r = await fetchFn(LAYERS_URL);
+  // `index/layers.json` is the canonical path; `<base>layers.json` is the fallback
+  let r = await fetchFn(INDEX_LAYERS_URL).catch(() => null);
+  if (!r?.ok) r = await fetchFn(LAYERS_URL);
   if (!r.ok) throw new Error(`gazetteer manifest: HTTP ${r.status}`);
   return parseLayers(await r.json());
 }
@@ -234,23 +238,15 @@ export function groupsFor(
 
 export type Camera = { bounds: [number, number, number, number] } | { center: [number, number]; zoom: number };
 
-/** a camera the bbox cannot give: Papahānaumokuākea's split polygon has bbox -180..180 and a
- * centroid in the wrong ocean */
-const CAMERA_OVERRIDES: Record<string, { center: [number, number]; zoom: number }> = {
-  [placeKey("places", "NMS:PMNM")]: { center: [-168, 25.5], zoom: 4.8 },
-};
+/** the zoom of a single point (a station): the CalCOFI station tiles hold all 113 points from z3 */
+export const POINT_ZOOM = 8;
 
-/** the deepest zoom of the point collections' tiles: below it the tiles thin the points to one per
- * tile (calcofi_stations at z9 holds one station per tile), so a point is shown from here */
-export const POINT_ZOOM = 10;
-
-/** fit the bbox; a polygon split at the antimeridian (bbox -180..180) cannot be fitted and its centroid
- * is only an average of the two halves, so it gets that centroid and a zoom from its latitude span, one
- * step wider than the span needs; a single point gets POINT_ZOOM */
+/** fit the bbox. Longitudes beyond 180 are fine for MapLibre: the index unwraps a polygon that crosses
+ * the antimeridian (Papahānaumokuākea is 177.8 to 199.0), so it is fitted like any other. A bbox that
+ * still spans -180..180 (12 rows) cannot be fitted: it gets its centroid and a zoom from its latitude
+ * span, one step wider than the span needs; a single point gets POINT_ZOOM */
 export function cameraFor(row: PlaceRow): Camera {
   const [w, s, e, n] = row.bbox;
-  const fixed = CAMERA_OVERRIDES[placeKey(row.collection, row.place_id)];
-  if (fixed) return fixed;
   if (w <= -179.9 && e >= 179.9) {
     const span = Math.max(n - s, 0);
     const zoom = Math.min(5, Math.max(1.2, Math.log2(360 / Math.max(span * 1.6, 8)) - 1));

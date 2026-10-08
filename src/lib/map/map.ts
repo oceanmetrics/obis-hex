@@ -26,7 +26,7 @@ let wired = false;
 
 // the Ocean Metrics gazetteer: one PMTiles per collection (`<bucket>/gazetteer/<collection>/places.pmtiles`,
 // source layer == the collection's slug, feature property `place_id`), read by HTTP range requests.
-// The selected place's collection is added as a source on demand (`pmtilesUrl()` in places/index.ts,
+// The selected place's collection is added as a source on demand (the manifest's `pmtiles` URL, else `pmtilesUrl()` in places/urls.ts,
 // the bucket host, because storage.oceanmetrics.io answers a 302 without CORS headers) and its credit
 // goes into the attribution control (the manifest's `attribution_html`, `creditsFor()`).
 /** the place to outline: its collection (the PMTiles and its source layer) and its feature id;
@@ -34,6 +34,8 @@ let wired = false;
 export interface PlaceTarget {
   collection: string;
   place_id: string;
+  /** the collection's PMTiles URL (the manifest's); `pmtilesUrl(collection)` when absent */
+  pmtiles?: string;
   credit?: string;
 }
 
@@ -274,7 +276,7 @@ export function createOutlineMap(
     added.add(collection);
     const ids = outlineIds(collection);
     const c = OUTLINE_COLORS[theme];
-    map.addSource(ids.source, { type: "vector", url: `pmtiles://${pmtilesUrl(collection)}` });
+    map.addSource(ids.source, { type: "vector", url: `pmtiles://${place?.collection === collection && place.pmtiles ? place.pmtiles : pmtilesUrl(collection)}` });
     const base = { source: ids.source, "source-layer": collection } as const;
     map.addLayer({ id: ids.casing, type: "line", ...base, filter: kindFilter(null, false), layout: { "line-join": "round" },
       paint: { "line-color": c.casing, "line-width": 5, "line-opacity": 0.7 } });

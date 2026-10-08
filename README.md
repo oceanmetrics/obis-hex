@@ -276,13 +276,15 @@ its collection; choosing a sea clears the outline and flies to its camera. The s
 `pl=<place_id>` (`AppState.place`), plus `pc=<collection>` (`AppState.placeColl`) only when the id occurs in
 more than one collection (three `BOEM:OCS-P 056x` ids are in both `boem_wind_leases` and
 `boem_pacific_og_leases`). A pre-0.7.0 link `pl=NMS:MBNMS` still works: the 20 original places are the
-`places` collection of the index. A polygon split at the antimeridian (49 rows have a bbox of -180..180)
-cannot be fitted, so it gets its centroid and a zoom from its latitude span (Papahānaumokuākea keeps its
-hand-set camera, `CAMERA_OVERRIDES`); a point gets zoom 10.
+`places` collection of the index. The index unwraps the bbox of a polygon that crosses the antimeridian
+(37 rows; Papahānaumokuākea is 177.8 to 199.0, centroid 188.0), and MapLibre accepts longitudes beyond 180, so
+those are fitted like any place. A bbox that still spans -180..180 (12 rows, mostly GEBCO) cannot be fitted:
+it gets its centroid and a zoom from its latitude span. A single point (a station) opens at zoom 8.
 
-- **Where the data is read from**: the manifest `<bucket>/gazetteer/layers.json` (per collection: `slug`,
-  `title`, `attribution_html`, `license`, `citation`, ... ; its `pmtiles` URL is on the storage host, so it is
-  rewritten to the bucket) and the index `<bucket>/gazetteer/index/places_index.parquet` (1.1 MB; one row per
+- **Where the data is read from**: the manifest `<bucket>/gazetteer/index/layers.json` (the canonical path;
+  `<bucket>/gazetteer/layers.json` is the fallback; per collection: `slug`, `title`, `attribution_html`,
+  `license`, `citation`, ... ; its `pmtiles` URL is on the storage host, so it is rewritten to the manifest's
+  `base_direct`, or to the bucket constant when `base_direct` is absent or unusable, see below) and the index `<bucket>/gazetteer/index/places_index.parquet` (1.1 MB; one row per
   place with `bbox` and centroid). The index is read with the app's DuckDB engine
   (`loadIndex()`: `SELECT place_id, name, ..., bbox.xmin AS xmin ... FROM read_parquet(<url>)`, no
   per-row attribution), the first time the Place panel opens or at once when the hash has `pl=`. The picker,
@@ -312,9 +314,13 @@ hand-set camera, `CAMERA_OVERRIDES`); a point gets zoom 10.
   credited elsewhere stays plain text). MapLibre has no setter for a custom attribution, so the control is
   replaced when the credited collection changes. Help → Data sources lists the gazetteer, with the selected
   collection's citation and licence from the manifest.
-- **Known limits**: the point tiles of `calcofi_stations` keep one station per tile below z10, so a station
-  is only drawn from zoom 10 (a place of that collection opens at z10). A split polygon's centroid is an
-  average of its two halves, which can fall in the wrong ocean; a published unwrapped bbox would fix it.
+- **`base_direct`** is `https://oceanmetrics.io-public.s3.amazonaws.com/gazetteer/` today, a virtual-hosted
+  S3 URL whose bucket name has a dot: the S3 wildcard certificate does not cover it, so a browser refuses
+  it (`curl`: "no alternative certificate subject name"). `directBase()` (`places/urls.ts`) therefore uses
+  `base_direct` only when it is https and not such a URL, and otherwise the path-style bucket constant
+  `https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer/` (which answers 206 with CORS).
+- **Known limits**: the 12 bboxes that still span -180..180 are placed by their centroid, which is only the
+  average of the two halves of a split geometry.
 
 ## Legacy URLs
 
@@ -384,7 +390,7 @@ Measured at 0.3.0 (2026-10-08):
 
 | | gzip | budget |
 |---|---|---|
-| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) → 647.7 KB (0.6.0) → 647.7 KB (0.6.1) → 648.1 KB (0.7.0) | 650 KB |
+| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) → 647.7 KB (0.6.0) → 647.7 KB (0.6.1) → 648.1 KB (0.7.0) → 648.3 KB (0.7.1) | 650 KB |
 | runtime worker (MapLibre's) | 140.2 KB | 150 KB |
 | fonts and images (the kit's nine woff2 faces and the MBON wordmark; 0.4.0) | 538.1 KB raw | 600 KB |
 | DuckDB-WASM (lazy: JS chunk 45 KB, wasm ~7.8 MB) | not counted | must stay lazy |
@@ -403,6 +409,13 @@ forbidden marker in the static graph, like DuckDB's bundle names.
 
 ## Versions
 
+- **0.7.1**: follows the republished gazetteer. The index bbox and centroid are unwrapped for polygons that
+  cross the antimeridian (37 rows), so `cameraFor()` fits them with `fitBounds` (Papahānaumokuākea opens
+  centred on 188.0, fully in view) and its hand-set camera is gone; the centroid-plus-zoom camera remains
+  for the 12 bboxes that still span -180..180. `calcofi_stations` tiles now keep all 113 points from z3, so
+  a single point opens at zoom 8 instead of 10. The manifest is read from `index/layers.json` (fallback
+  `layers.json`) and PMTiles URLs are rewritten with `base_direct` when a browser can use it (it cannot
+  today: dotted bucket name, bad certificate; see "Place outline"). Entry 648.3 KB gzip of 650 KB (`directBase()` is in the always-loaded `urls.ts`).
 - **0.7.0**: the Place & scale picker lists the whole Ocean Metrics gazetteer (14,734 places in 22
   collections, from `layers.json` and `places_index.parquet`) instead of 20 presets, after a "Seas &
   oceans" group of the 13 camera presets. A chosen place fits the map to its bounds, is outlined from its

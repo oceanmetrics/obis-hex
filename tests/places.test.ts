@@ -10,7 +10,11 @@ import {
   OBIS_CREDIT,
   POINT_ZOOM,
   cameraFor,
+  INDEX_LAYERS_URL,
+  LAYERS_URL,
   citationFor,
+  directBase,
+  loadLayers,
   creditsFor,
   fold,
   groupsFor,
@@ -48,6 +52,37 @@ describe("manifest", () => {
     }
     expect(layers[1].place_type).toBeNull();
   });
+  it("rewrites the PMTiles URL to base_direct when the manifest has it and a browser can use it", () => {
+    const m = (base_direct?: string) => ({ layers: [{ slug: "calcofi_lines", pmtiles: "https://storage.oceanmetrics.io/gazetteer/calcofi_lines/places.pmtiles" }], base_direct });
+    expect(parseLayers(m("https://example.org/gz/"))[0].pmtiles).toBe("https://example.org/gz/calcofi_lines/places.pmtiles");
+    expect(parseLayers(m("https://example.org/gz"))[0].pmtiles).toBe("https://example.org/gz/calcofi_lines/places.pmtiles");
+    expect(parseLayers(m())[0].pmtiles).toBe(pmtilesUrl("calcofi_lines")); // absent: the constant
+    expect(parseLayers(m(""))[0].pmtiles).toBe(pmtilesUrl("calcofi_lines"));
+  });
+  it("regression: a virtual-hosted S3 base_direct with a dot in the bucket (bad certificate) falls back to the constant", () => {
+    const bad = "https://oceanmetrics.io-public.s3.amazonaws.com/gazetteer/";
+    expect(directBase({ base_direct: bad })).toBe(directBase({}));
+    expect(directBase({ base_direct: "http://example.org/gz/" })).toBe(directBase({}));
+    expect(directBase({ base_direct: "not a url" })).toBe(directBase({}));
+    expect(directBase({ base_direct: "https://mybucket.s3.amazonaws.com/gz/" })).toBe("https://mybucket.s3.amazonaws.com/gz/");
+    expect(directBase({ base_direct: "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer/" })).toBe(
+      "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer/",
+    );
+  });
+  it("loads index/layers.json first and falls back to <base>layers.json", async () => {
+    const body = readFileSync(`${dir}/layers.json`, "utf8");
+    const calls: string[] = [];
+    const fake = (fail: string[]) => (async (url: string) => {
+      calls.push(url);
+      return fail.includes(url) ? ({ ok: false, status: 404 } as Response) : ({ ok: true, status: 200, json: async () => JSON.parse(body) } as Response);
+    }) as unknown as typeof fetch;
+    expect((await loadLayers(fake([]))).length).toBe(3);
+    expect(calls).toEqual([INDEX_LAYERS_URL]);
+    calls.length = 0;
+    expect((await loadLayers(fake([INDEX_LAYERS_URL]))).length).toBe(3);
+    expect(calls).toEqual([INDEX_LAYERS_URL, LAYERS_URL]);
+    await expect(loadLayers(fake([INDEX_LAYERS_URL, LAYERS_URL]))).rejects.toThrow(/HTTP 404/);
+  });
   it("rejects a manifest with no layers", () => {
     expect(() => parseLayers({ schema: 1 })).toThrow(/no layers/);
   });
@@ -81,8 +116,8 @@ describe("index rows", () => {
       expect(got.length).toBe(10);
       const pmnm = got.find((r) => r.place_id === "NMS:PMNM")!;
       expect(pmnm.collection).toBe("places");
-      expect(pmnm.bbox[0]).toBe(-180);
-      expect(pmnm.bbox[2]).toBe(180);
+      expect(pmnm.bbox[0]).toBeCloseTo(177.84422, 4); // unwrapped across the antimeridian
+      expect(pmnm.bbox[2]).toBeCloseTo(198.98269, 4);
       expect(pmnm.name).toBe("Papahānaumokuākea Marine National Monument");
       expect(got.filter((r) => r.place_id === "BOEM:OCS-P 0562").map((r) => r.collection).sort()).toEqual([
         "boem_pacific_og_leases",
@@ -178,7 +213,11 @@ describe("camera", () => {
   it("fits the bbox", () => {
     expect(cameraFor(by("NMS:MBNMS"))).toEqual({ bounds: [-123.14, 35.5, -121.104, 37.882] });
   });
-  it("a polygon split at the antimeridian (bbox -180..180) gets a centre and zoom, never bounds", () => {
+  it("regression: an unwrapped dateline-crosser (Papahānaumokuākea, 177.8 to 199.0) is fitted, not given a hand-set camera", () => {
+    expect(cameraFor(by("NMS:PMNM"))).toEqual({ bounds: [177.84422, 19.23, 198.98269390000002, 31.8] });
+    expect(by("NMS:PMNM").bbox[2]).toBeGreaterThan(180);
+  });
+  it("a bbox that still spans -180..180 gets a centre and zoom, never bounds", () => {
     const split = row("Aleutian planning area", "boem_ocs_planning", "BOEM:A");
     split.bbox = [-180, 50, 180, 62];
     split.lon = 175;
@@ -188,16 +227,13 @@ describe("camera", () => {
     expect(cam).toHaveProperty("center", [175, 55]);
     expect((cam as { zoom: number }).zoom).toBeGreaterThanOrEqual(1.2);
     expect((cam as { zoom: number }).zoom).toBeLessThanOrEqual(5);
-    split.bbox = [-179.95, 50, 179.99, 62]; // the 49 split rows are within 0.1 degree of the edge
+    split.bbox = [-179.95, 50, 179.99, 62]; // the 12 still-split rows are within 0.1 degree of the edge
     expect("bounds" in cameraFor(split)).toBe(false);
     split.bbox = [-170, 50, 170, 62]; // wide but not split: fitted
     expect("bounds" in cameraFor(split)).toBe(true);
   });
-  it("Papahānaumokuākea keeps its hand-set camera (its centroid is in the wrong ocean)", () => {
-    expect(cameraFor(by("NMS:PMNM"))).toEqual({ center: [-168, 25.5], zoom: 4.8 });
-  });
-  it("regression: a single point opens at z10, where the CalCOFI station tiles stop thinning (z9 drew nothing)", () => {
-    expect(POINT_ZOOM).toBe(10);
+  it("a single point gets its position and POINT_ZOOM (8: the station tiles hold every point from z3)", () => {
+    expect(POINT_ZOOM).toBe(8);
     expect(cameraFor(by("CALCOFI:station-093.3-030.0"))).toEqual({ center: [-120.8, 34.5], zoom: POINT_ZOOM });
   });
 });

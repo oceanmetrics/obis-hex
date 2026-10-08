@@ -69,5 +69,6 @@
    "license_url": "https://www.usa.gov/publicdomain/label/1.0/",
    "citation": "BOEM. Rescinded planning areas, v1.0.0."
   }
- ]
+ ],
+ "base_direct": "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer/"
 }

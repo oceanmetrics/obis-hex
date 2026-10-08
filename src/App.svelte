@@ -410,6 +410,7 @@
       ? {
           collection: placeRow.collection,
           place_id: placeRow.place_id,
+          pmtiles: placeData.layers.find((l) => l.slug === placeRow.collection)?.pmtiles,
           credit: placeApi.creditsFor(placeRow.collection, placeData.layers, [OBIS_CREDIT]),
         }
       : null,

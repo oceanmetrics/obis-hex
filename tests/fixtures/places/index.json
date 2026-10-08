@@ -90,11 +90,11 @@
   "place_type": null,
   "geom_type": "MultiPolygon",
   "collection": "places",
-  "xmin": -180,
+  "xmin": 177.84422,
   "ymin": 19.23,
-  "xmax": 180,
+  "xmax": 198.98269390000002,
   "ymax": 31.8,
-  "centroid_lon": -147.17,
+  "centroid_lon": 188.02410768020664,
   "centroid_lat": 26.01
  },
  {
