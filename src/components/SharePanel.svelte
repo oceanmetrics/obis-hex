@@ -46,7 +46,7 @@
   <p class="hint">The PNG carries the title, the colour scale, the release and this link.</p>
 
   <div>
-    <span class="mbon-label">cite</span>
+    <span class="mbon-label">cite this data</span>
     <pre class="cite">{cite}</pre>
     <Button variant="quiet" size="sm" onclick={() => copy("cite", cite)}>{copied === "cite" ? "copied" : "Copy citation"}</Button>
   </div>
@@ -64,7 +64,7 @@
 <style>
   .share { display: flex; flex-direction: column; gap: var(--space-3); }
   .row { display: flex; gap: var(--space-2); flex-wrap: wrap; }
-  .cite { white-space: pre-wrap; font: var(--text-xs) / 1.45 var(--font-mono); background: var(--bg-tint); border-radius: var(--radius-sm); padding: var(--space-2); margin: var(--space-1) 0; }
+  .cite { white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-xs) / 1.45 var(--font-mono); background: var(--bg-tint); border-radius: var(--radius-sm); padding: var(--space-2); margin: var(--space-1) 0; }
   .sqlt summary { cursor: pointer; font: var(--type-small); color: var(--link); }
   .body { display: flex; flex-direction: column; gap: var(--space-3); margin-top: var(--space-2); }
   .timing { display: flex; flex-direction: column; gap: 2px; font: var(--text-xs) / 1.45 var(--font-mono); color: var(--text-body); word-break: break-all; }
