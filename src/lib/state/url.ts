@@ -3,9 +3,10 @@
 //
 //   #i=es&l=eov:fish&p=1990&r=auto&o=0.85&t=dark&d=release&g=flat&c=-20.00,5.00,1.40
 //
-// The nine keys above are always written, in that order, so every link made before the MBON
-// re-layout (v0.4.0) parses to the same view and formats back to the same string. The layout keys
-// added in 0.4.0 are written only when they differ from their default (see LAYOUT_KEYS):
+// The eight keys other than `g` are always written, in that order. `g` (projection) is written only
+// when it is not the default, the globe (0.5.1); a link without `g` opens the globe, a link with
+// `g=flat` still opens the flat map. The layout keys added in 0.4.0 are written only when they
+// differ from their default (see LAYOUT_KEYS):
 //   k=place|indicator|share   Controls tab (default taxon)
 //   cc=1                      Controls pane folded to its pill
 //   tc=1                      Time strip folded
@@ -67,7 +68,7 @@ export const DEFAULT_STATE: AppState = {
   opacity: 0.85,
   theme: "dark",
   domain: "release",
-  proj: "flat",
+  proj: "globe",
   lon: -20,
   lat: 5,
   zoom: 1.4,
@@ -93,7 +94,7 @@ export function formatHash(s: AppState): string {
     ["o", String(round(s.opacity, 2))],
     ["t", s.theme],
     ["d", s.domain],
-    ["g", s.proj],
+    ...(s.proj !== DEFAULT_STATE.proj ? [["g", s.proj] as [string, string]] : []),
     ["c", [round(s.lon, 3), round(s.lat, 3), round(s.zoom, 2)].join(",")],
   ];
   if (s.tab !== DEFAULT_STATE.tab) p.push(["k", s.tab]);

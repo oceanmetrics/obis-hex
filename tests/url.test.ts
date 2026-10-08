@@ -47,11 +47,15 @@ describe("URL hash state", () => {
     expect(parseHash("#l=taxon:%E0%A4%A:x")).toEqual(DEFAULT_STATE);
   });
 
-  it("projection: globe round-trips, absent means flat", () => {
-    const h = formatHash({ ...DEFAULT_STATE, proj: "globe" });
-    expect(h).toContain("g=globe");
-    expect(parseHash(h).proj).toBe("globe");
-    expect(parseHash("#i=sp").proj).toBe("flat");
+  it("projection: the globe is the default (0.5.1), written only for flat", () => {
+    expect(DEFAULT_STATE.proj).toBe("globe");
+    expect(parseHash("").proj).toBe("globe");
+    expect(parseHash("#i=sp").proj).toBe("globe");
+    expect(formatHash(DEFAULT_STATE)).not.toMatch(/[&#]g=/);
+    const h = formatHash({ ...DEFAULT_STATE, proj: "flat" });
+    expect(h).toContain("&d=release&g=flat&c=");
+    expect(parseHash(h).proj).toBe("flat");
+    expect(parseHash("#g=globe").proj).toBe("globe");
   });
 
   it("rounds the camera", () => {
@@ -94,13 +98,19 @@ describe("URL hash encoding (regression: taxon key was double-encoded, %2520)", 
 });
 
 describe("layout keys (0.4.0 MBON re-layout)", () => {
-  // the links made before 0.4.0, among them the paper figures and the UI assessment states
+  // the links made before 0.4.0, among them the paper figures and the UI assessment states; since
+  // 0.5.1 the globe is the default, so `g=globe` is dropped when formatting and `g=flat` is kept
   const OLD = [
-    "#i=es&l=all&p=all&r=1&o=0.85&t=dark&d=release&g=globe&c=-30,15,1.5",
+    "#i=es&l=all&p=all&r=1&o=0.85&t=dark&d=release&c=-30,15,1.5",
     "#i=es&l=eov:seagrasses&p=all&r=4&o=0.85&t=light&d=release&g=flat&c=-80.5,19.5,4.3",
     "#i=es&l=taxon:class:Aves&p=all&r=7&o=0.85&t=dark&d=release&g=flat&c=-122.05,36.75,9.2",
     "#i=sp&l=aphia:137092&p=1990&r=auto&o=0.4&t=light&d=view&g=flat&c=10,20,3",
   ];
+  it("an old g=globe link opens the same view and drops the now-default key", () => {
+    const h = "#i=es&l=all&p=all&r=1&o=0.85&t=dark&d=release&g=globe&c=-30,15,1.5";
+    expect(parseHash(h).proj).toBe("globe");
+    expect(formatHash(parseHash(h))).toBe(OLD[0]);
+  });
   it("an old link opens the same view and formats back to the same string", () => {
     for (const h of OLD) {
       const s = parseHash(h);
@@ -109,8 +119,8 @@ describe("layout keys (0.4.0 MBON re-layout)", () => {
       expect(s.ctlFolded || s.timeFolded || s.cellOpen || s.cell !== null || !s.labels).toBe(false);
     }
   });
-  it("writes the layout keys only when they differ from the default, after the nine view keys", () => {
-    expect(formatHash(DEFAULT_STATE)).not.toMatch(/[&#](k|cc|tc|x|xo|b)=/);
+  it("writes the layout keys only when they differ from the default, after the eight view keys", () => {
+    expect(formatHash(DEFAULT_STATE)).not.toMatch(/[&#](g|k|cc|tc|x|xo|b)=/);
     const h = formatHash({ ...DEFAULT_STATE, tab: "indicator", ctlFolded: true, cell: "8a2a1072b59ffff", labels: false });
     expect(h.endsWith("&k=indicator&cc=1&x=8a2a1072b59ffff&b=0")).toBe(true);
   });

@@ -12,6 +12,8 @@ export const PUBLIC_DATA_BASE =
 export interface ReleaseJson {
   release: string;
   obis_snapshot?: string;
+  /** ISO UTC time the release was built (written by the exporter) */
+  built_at?: string;
   res?: number[];
   res_decade?: number[];
   decades?: number[];

@@ -42,7 +42,7 @@ the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-a
   at any res for a WoRMS taxon; taxon groups say so instead.
 - **Cell** (right edge): a pill that lights when a hexagon is clicked; open it for all five indicators.
   Hovering a hexagon shows them too.
-- **Footer** (kit): built by Ocean Metrics · OBIS snapshot · release · version · bytes · ms · source.
+- **Footer** (kit): built by Ocean Metrics · OBIS snapshot · data build date · release · version · bytes · ms · source.
 - **Phone**: the panes become bottom sheets (Controls folded at first), the footer wraps.
 - The URL hash holds the whole view, so any link reproduces it (see "URL" below). Old links to the
   Shiny app open the same view here once Caddy redirects them (see "Legacy URLs").
@@ -50,9 +50,11 @@ the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-a
 ## URL
 
 `#i=es&l=eov:fish&p=1990&r=auto&o=0.85&t=dark&d=release&g=flat&c=-20,5,1.4` — indicator, layer,
-period, resolution, opacity, theme, ramp domain, projection, centre and zoom: always written, in
-that order. 0.4.0 added layout keys, written only when not at their default and after the nine
-above, so every older link opens the same view and formats back to the same string (tested):
+period, resolution, opacity, theme, ramp domain, projection, centre and zoom, in that order. All are
+always written except the projection `g`: the map opens on the globe by default (0.5.1), so `g=flat`
+is written for the flat map and `g` is left out for the globe (a link without `g` is the globe; an
+older `g=flat` link still opens flat). 0.4.0 added layout keys, written only when not at their
+default and after the keys above (tested):
 
 | key | value | default |
 |---|---|---|
@@ -217,7 +219,7 @@ as used here) follows it: on a globe projection it swaps its `MapView` for a `_G
 `H3HexagonLayer` switches to its polygon path there (a globe viewport has a `resolution`). Checked
 with screenshots at res 1–4, including cells across the antimeridian (Fiji, `c=178,-20`) and the
 coastline at zoom 5 (Florida, Cuba, Yucatán): the hexagons sit on the sphere, cull at the limb and
-match the basemap. So the globe is a plain URL field (`g=globe|flat`, default flat) with a toggle,
+match the basemap. So the globe is a plain URL field (`g=flat` for the flat map; the globe is the default since 0.5.1 and writes no key) with a toggle,
 re-applied on every style load (a theme swap replaces the style); no separate MapLibre fill layer
 was needed. Cells with no value (ES(50) where n < 50) are transparent, so over the dark basemap's
 land they read as near-black, as in the Shiny app.
@@ -290,7 +292,7 @@ Measured at 0.3.0 (2026-10-08):
 
 | | gzip | budget |
 |---|---|---|
-| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) | 650 KB |
+| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) | 650 KB |
 | runtime worker (MapLibre's) | 140.2 KB | 150 KB |
 | fonts and images (the kit's nine woff2 faces and the MBON wordmark; 0.4.0) | 538.1 KB raw | 600 KB |
 | DuckDB-WASM (lazy: JS chunk 45 KB, wasm ~7.8 MB) | not counted | must stay lazy |
@@ -306,6 +308,13 @@ use, so they got their own 600 KB budget (`FONT_IMAGE_BUDGET_BYTES`) instead of 
 budget. 0.5.0 (welcome card, tour, Help modals, feedback bubble) added 6.3 KB; the feedback dialog and
 `html-to-image` are a dynamic `import()`, and `fontEmbedCSS` (an html-to-image identifier) is a
 forbidden marker in the static graph, like DuckDB's bundle names.
+
+## Versions
+
+- **0.5.1**: the map opens on the globe (`proj` default `globe`; `g=flat` is the only value written,
+  see "URL"). The footer, About, Data sources and "Cite this data" state the data build date, the
+  UTC day of `release.json` `built_at` (`OBIS 2026-07-28 · data 2026-10-07 · release v20260728 ·
+  v0.5.1`), left out when the release has no `built_at`. `dataDateText()` in `src/lib/export/cite.ts`.
 
 ## Deploy
 

@@ -9,12 +9,12 @@ export interface Source {
   doi?: string;
 }
 
-export function sources(o: { snapshot?: string | null; release?: string | null; year: string }): Source[] {
+export function sources(o: { snapshot?: string | null; release?: string | null; builtAt?: string | null; year: string }): Source[] {
   return [
     {
       name: "OBIS",
       href: "https://obis.org",
-      role: `The occurrence records${o.snapshot ? ` (full snapshot ${o.snapshot})` : ""}, aggregated to H3 hexagons in release ${o.release ?? "…"}.`,
+      role: `The occurrence records${o.snapshot ? ` (full snapshot ${o.snapshot})` : ""}, aggregated to H3 hexagons in release ${o.release ?? "…"}${o.builtAt ? ` (data built ${o.builtAt})` : ""}.`,
       citation: `OBIS (${o.year}) Ocean Biodiversity Information System. Intergovernmental Oceanographic Commission of UNESCO. https://obis.org`,
       licence: "CC0, CC BY or CC BY-NC, per dataset (cite the datasets you use: manual.obis.org/citing.html)",
     },
