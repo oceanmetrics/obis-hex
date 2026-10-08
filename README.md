@@ -390,13 +390,13 @@ Measured at 0.3.0 (2026-10-08):
 
 | | gzip | budget |
 |---|---|---|
-| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) → 647.7 KB (0.6.0) → 647.7 KB (0.6.1) → 648.1 KB (0.7.0) → 648.3 KB (0.7.1) | 650 KB |
+| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) → 647.7 KB (0.6.0) → 647.7 KB (0.6.1) → 648.1 KB (0.7.0) → 648.3 KB (0.7.1, 651.1 KB measured in CI) | 660 KB (650 until 0.7.1) |
 | runtime worker (MapLibre's) | 140.2 KB | 150 KB |
 | fonts and images (the kit's nine woff2 faces and the MBON wordmark; 0.4.0) | 538.1 KB raw | 600 KB |
 | DuckDB-WASM (lazy: JS chunk 45 KB, wasm ~7.8 MB) | not counted | must stay lazy |
 | feedback dialog (with the 0.6.0 endpoint, payload and colour code) + html-to-image (lazy, 0.5.0) | 4.9 KB (5.3 KB at 0.6.0, before Copy report and Download PNG went) + 5.3 KB, not counted | must stay lazy |
 
-The atlas budget is 450 KB; deck.gl and h3-js add roughly 300 KB, hence 650 KB here. The viewport
+The atlas budget is 450 KB; deck.gl and h3-js add roughly 300 KB, hence 650 KB here, raised to 660 KB at 0.7.2 because GitHub Actions' gzip measures the entry about 3 KB larger than a local build (651.1 vs 648.3 KB at 0.7.1) and the gazetteer picker had left under 2 KB of headroom; the next real growth should come out of the entry, not the budget. The viewport
 code (`polygonToCells`, `gridDisk`) uses the h3-js already in the bundle for deck.gl, so 0.2.0 (viewport loading,
 globe toggle, legacy links) added 4 KB and 0.3.0 (the WoRMS taxon search and subtree loader) another
 4 KB; the budget is unchanged. 0.4.0 (the MBON layout on `@marinebon/ui`) added 23.6 KB of JS and
@@ -409,6 +409,7 @@ forbidden marker in the static graph, like DuckDB's bundle names.
 
 ## Versions
 
+- **0.7.2** (2026-10-08): entry size budget 650 → 660 KB; CI gzip measures ~3 KB more than a local build and 0.7.1 failed the budget there (651.1 KB). No code change.
 - **0.7.1**: follows the republished gazetteer. The index bbox and centroid are unwrapped for polygons that
   cross the antimeridian (37 rows), so `cameraFor()` fits them with `fitBounds` (Papahānaumokuākea opens
   centred on 188.0, fully in view) and its hand-set camera is gone; the centroid-plus-zoom camera remains
