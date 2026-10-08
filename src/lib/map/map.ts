@@ -8,11 +8,13 @@
 // every frame. So the hexagons are always above the map's own layers, and the gazetteer outline is
 // drawn by a second, transparent MapLibre map stacked above deck; see `createOutlineMap`.)
 import { Map as MapLibreMap, setWorkerUrl, addProtocol, AttributionControl, NavigationControl } from "maplibre-gl";
+import type { FilterSpecification } from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import type { Layer, PickingInfo } from "@deck.gl/core";
+import { OBIS_CREDIT, pmtilesUrl } from "../places/urls";
 
 /** CARTO's keyless vector GL styles (the raster endpoints now need a key; atlas basemap.ts). */
 export const BASEMAP_STYLE: Record<"dark" | "light", string> = {
@@ -22,28 +24,37 @@ export const BASEMAP_STYLE: Record<"dark" | "light", string> = {
 
 let wired = false;
 
-// the Ocean Metrics gazetteer's place polygons (NOAA sanctuaries, an EEZ, an MPA), as PMTiles read by
-// HTTP range requests; the same file, source layer and place ids erddap-places draws. The tiles' own
-// metadata carries the attribution (NOAA ONMS, MarineRegions.org, ProtectedSeas), which MapLibre
-// shows in its attribution control because the source is in use.
-// The bucket URL, not storage.oceanmetrics.io: that host answers a 302 without Access-Control-Allow-Origin,
-// which browsers reject before following, so range requests through it fail (status 0). The bucket
-// answers 206 with ACAO * and exposes Content-Range.
-export const GAZETTEER_PMTILES =
-  "https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer/places/places.pmtiles";
-export const PLACES_SOURCE = "gazetteer-places";
-export const PLACES_SOURCE_LAYER = "places";
-export const PLACES_ATTRIBUTION =
-  'Places: <a href="https://sanctuaries.noaa.gov" target="_blank" rel="noopener">NOAA ONMS</a>, ' +
-  '<a href="https://www.marineregions.org" target="_blank" rel="noopener">MarineRegions.org</a>, ' +
-  '<a href="https://protectedseas.net" target="_blank" rel="noopener">ProtectedSeas</a> via ' +
-  '<a href="https://oceanmetrics.io" target="_blank" rel="noopener">Ocean Metrics</a>';
-const PLACES_SELECTED = "gazetteer-places-selected";
-const PLACES_SELECTED_CASING = "gazetteer-places-selected-casing";
+// the Ocean Metrics gazetteer: one PMTiles per collection (`<bucket>/gazetteer/<collection>/places.pmtiles`,
+// source layer == the collection's slug, feature property `place_id`), read by HTTP range requests.
+// The selected place's collection is added as a source on demand (`pmtilesUrl()` in places/index.ts,
+// the bucket host, because storage.oceanmetrics.io answers a 302 without CORS headers) and its credit
+// goes into the attribution control (the manifest's `attribution_html`, `creditsFor()`).
+/** the place to outline: its collection (the PMTiles and its source layer) and its feature id;
+ * `credit` is the collection's attribution line for the map's attribution control */
+export interface PlaceTarget {
+  collection: string;
+  place_id: string;
+  credit?: string;
+}
+
+/** the source and layer ids of one collection on the outline map */
+export const outlineIds = (collection: string) => ({
+  source: `gz-${collection}`,
+  casing: `gz-${collection}-casing`,
+  line: `gz-${collection}-line`,
+  pointCasing: `gz-${collection}-point-casing`,
+  point: `gz-${collection}-point`,
+});
 
 /** the map filter that matches one place id; an unset place matches nothing */
 export function placeFilter(placeId: string | null): ["==", ["get", string], string] {
   return ["==", ["get", "place_id"], placeId ?? ""];
+}
+
+/** polygons and lines are drawn as lines, points as circles: one filter per kind, so a collection
+ * of any geometry type (a polygon, a CalCOFI line, a GEBCO point) shows */
+export function kindFilter(placeId: string | null, point: boolean): FilterSpecification {
+  return ["all", placeFilter(placeId), [point ? "==" : "!=", ["geometry-type"], "Point"]] as FilterSpecification;
 }
 
 /** outline colours per basemap theme: the kit's place facet navy (`--facet-place`) on the light
@@ -63,8 +74,8 @@ export interface MapHandle {
   setProjection(p: Projection): void;
   /** show or hide the basemap's labels (its symbol layers) */
   setLabels(on: boolean): void;
-  /** outline one gazetteer place (its `place_id`), or none (null) */
-  setPlace(placeId: string | null): void;
+  /** outline one gazetteer place (its collection's PMTiles and `place_id`) and credit its collection, or none (null) */
+  setPlace(target: PlaceTarget | null): void;
   /** the map and hexagons as one canvas (basemap + deck overlay), for the PNG export */
   snapshot(): HTMLCanvasElement;
   /** the visible bounds [west, south, east, north] (west may be < -180 with world copies) */
@@ -79,7 +90,7 @@ export function createMap(
     theme: "dark" | "light";
     projection: Projection;
     labels?: boolean;
-    place?: string | null;
+    place?: PlaceTarget | null;
     center: [number, number];
     zoom: number;
     onView: (v: { lon: number; lat: number; zoom: number }) => void;
@@ -93,7 +104,7 @@ export function createMap(
     wired = true;
   }
   let theme = opts.theme;
-  let place: string | null = opts.place ?? null;
+  let place: PlaceTarget | null = opts.place ?? null;
   let projection = opts.projection;
   let labels = opts.labels ?? true;
   const map = new MapLibreMap({
@@ -106,15 +117,15 @@ export function createMap(
     renderWorldCopies: true,
   });
   map.addControl(new NavigationControl({ showCompass: false }), "top-right");
-  map.addControl(
-    new AttributionControl({
-      compact: true,
-      customAttribution: [
-        '<a href="https://obis.org" target="_blank" rel="noopener">OBIS</a>',
-        PLACES_ATTRIBUTION,
-      ],
-    }),
-  );
+  // MapLibre has no setter for a custom attribution, so the control is replaced when the credited
+  // collection changes
+  let attrib: AttributionControl | null = null;
+  const setCredit = (credit: string | undefined) => {
+    if (attrib) map.removeControl(attrib);
+    attrib = new AttributionControl({ compact: true, customAttribution: credit ? [OBIS_CREDIT, credit] : [OBIS_CREDIT] });
+    map.addControl(attrib);
+  };
+  setCredit(place?.credit);
   map.resize();
   const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => map.resize()) : null;
   ro?.observe(container);
@@ -167,10 +178,10 @@ export function createMap(
       labels = on;
       if (map.isStyleLoaded()) applyLabels();
     },
-    setPlace(id) {
-      if (id === place) return;
-      place = id;
-      outline.setPlace(id);
+    setPlace(target) {
+      if (target?.credit !== place?.credit) setCredit(target?.credit);
+      place = target;
+      outline.setPlace(target);
     },
     snapshot() {
       const base = map.getCanvas();
@@ -212,7 +223,7 @@ export function createMap(
  * changes, so the basemap swap needs no re-adding of its source or layers. */
 export function createOutlineMap(
   main: MapLibreMap,
-  init: { theme: "dark" | "light"; projection: Projection; place: string | null },
+  init: { theme: "dark" | "light"; projection: Projection; place: PlaceTarget | null },
 ) {
   const el = document.createElement("div");
   el.className = "place-outline";
@@ -229,9 +240,11 @@ export function createOutlineMap(
       ".maplibregl-ctrl-top-right,.maplibregl-ctrl-bottom-right,.maplibregl-ctrl-bottom-left{z-index:4!important}";
     document.head.append(st);
   }
-  let place = init.place;
+  let place: PlaceTarget | null = init.place;
   let theme = init.theme;
   let ready = false;
+  /** collections whose source and layers are on the map */
+  const added = new Set<string>();
   const map = new MapLibreMap({
     container: el,
     style: { version: 8, sources: {}, layers: [] },
@@ -255,44 +268,57 @@ export function createOutlineMap(
     map.resize();
     sync();
   };
+  // add a collection's source and its line and circle layers (each with a casing) the first time it is used
+  const ensure = (collection: string) => {
+    if (added.has(collection)) return;
+    added.add(collection);
+    const ids = outlineIds(collection);
+    const c = OUTLINE_COLORS[theme];
+    map.addSource(ids.source, { type: "vector", url: `pmtiles://${pmtilesUrl(collection)}` });
+    const base = { source: ids.source, "source-layer": collection } as const;
+    map.addLayer({ id: ids.casing, type: "line", ...base, filter: kindFilter(null, false), layout: { "line-join": "round" },
+      paint: { "line-color": c.casing, "line-width": 5, "line-opacity": 0.7 } });
+    map.addLayer({ id: ids.line, type: "line", ...base, filter: kindFilter(null, false), layout: { "line-join": "round" },
+      paint: { "line-color": c.line, "line-width": 2.5 } });
+    map.addLayer({ id: ids.pointCasing, type: "circle", ...base, filter: kindFilter(null, true),
+      paint: { "circle-radius": 8, "circle-color": c.casing, "circle-opacity": 0.7 } });
+    map.addLayer({ id: ids.point, type: "circle", ...base, filter: kindFilter(null, true),
+      paint: { "circle-radius": 5, "circle-color": c.line, "circle-stroke-color": c.casing, "circle-stroke-width": 1 } });
+  };
+  // show the selected place and clear every other collection's filter
+  const apply = () => {
+    if (!ready) return;
+    if (place) ensure(place.collection);
+    for (const coll of added) {
+      const ids = outlineIds(coll);
+      const id = place?.collection === coll ? place.place_id : null;
+      for (const l of [ids.casing, ids.line]) map.setFilter(l, kindFilter(id, false));
+      for (const l of [ids.pointCasing, ids.point]) map.setFilter(l, kindFilter(id, true));
+    }
+  };
   map.on("load", () => {
     map.setProjection({ type: init.projection === "globe" ? "globe" : "mercator" });
-    map.addSource(PLACES_SOURCE, { type: "vector", url: `pmtiles://${GAZETTEER_PMTILES}` });
-    const c = OUTLINE_COLORS[theme];
-    map.addLayer({
-      id: PLACES_SELECTED_CASING,
-      type: "line",
-      source: PLACES_SOURCE,
-      "source-layer": PLACES_SOURCE_LAYER,
-      filter: placeFilter(place),
-      layout: { "line-join": "round" },
-      paint: { "line-color": c.casing, "line-width": 5, "line-opacity": 0.7 },
-    });
-    map.addLayer({
-      id: PLACES_SELECTED,
-      type: "line",
-      source: PLACES_SOURCE,
-      "source-layer": PLACES_SOURCE_LAYER,
-      filter: placeFilter(place),
-      layout: { "line-join": "round" },
-      paint: { "line-color": c.line, "line-width": 2.5 },
-    });
     ready = true;
+    apply();
     sync();
   });
   main.on("move", sync);
   main.on("resize", onResize);
   return {
-    setPlace(id: string | null) {
-      place = id;
-      for (const l of [PLACES_SELECTED_CASING, PLACES_SELECTED]) if (map.getLayer(l)) map.setFilter(l, placeFilter(id));
+    setPlace(target: PlaceTarget | null) {
+      place = target;
+      apply();
     },
     setTheme(t: "dark" | "light") {
       theme = t;
       const c = OUTLINE_COLORS[t];
-      if (map.getLayer(PLACES_SELECTED)) {
-        map.setPaintProperty(PLACES_SELECTED, "line-color", c.line);
-        map.setPaintProperty(PLACES_SELECTED_CASING, "line-color", c.casing);
+      for (const coll of added) {
+        const ids = outlineIds(coll);
+        map.setPaintProperty(ids.line, "line-color", c.line);
+        map.setPaintProperty(ids.casing, "line-color", c.casing);
+        map.setPaintProperty(ids.point, "circle-color", c.line);
+        map.setPaintProperty(ids.point, "circle-stroke-color", c.casing);
+        map.setPaintProperty(ids.pointCasing, "circle-color", c.casing);
       }
     },
     setProjection(p: Projection) {

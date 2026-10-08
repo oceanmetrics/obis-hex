@@ -29,7 +29,7 @@ the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-a
   class and order (from `taxon_groups.parquet`, most records first, record counts on a log bar, common
   names for the groups people look for), and **Any taxon (WoRMS)**: the children of any WoRMS AphiaID,
   computed live by the h3t subtree service (see below; the one layer not in the static release).
-  ② **Place & scale**: go to a sea or sanctuary (a sanctuary, reserve or EEZ is outlined on the map, see "Place outline"), hexagon size (auto from zoom, the Shiny app's
+  ② **Place & scale**: go to a sea or ocean, or search any of the 14,734 places of the Ocean Metrics gazetteer (sanctuaries, leases, planning areas, lines, undersea features; the place is outlined and credited, see "Place outline"), hexagon size (auto from zoom, the Shiny app's
   mapping capped at 7, or 5 with a decade on a release layer; or pinned), the period, flat or globe.
   ③ **Indicator**: ES(50), species richness, Shannon H′, Simpson Σp², records, each with a line of
   meaning; *More options*: ramp domain (whole release / loaded hexagons), fill opacity, basemap labels.
@@ -64,7 +64,8 @@ default and after the keys above (tested):
 | `x` | the selected hexagon (H3 index); lights the Cell pill | none |
 | `xo=1` | the Cell pane open | folded |
 | `b=0` | basemap labels off | on |
-| `pl` | the outlined gazetteer place (`NMS:MBNMS`, `MRGID:8439`, `PSGID:939`; 0.5.2) | none |
+| `pl` | the outlined gazetteer place: any id of the gazetteer index, percent-encoded (`NMS:MBNMS`, `GEBCO:1001`, `BOEM:OCS-A%200512`; letters, digits, `: _ - .` and spaces, 1-80 characters; 0.5.2, any id since 0.7.0) | none |
+| `pc` | the place's gazetteer collection (`boem_wind_leases`), written only when the id occurs in more than one collection; without it the first collection that has the id opens (0.7.0) | none |
 
 No key was renamed, so no alias is needed; with no `t=` the theme is `?theme=`, then the stored kit
 choice, then dark (the old default).
@@ -259,35 +260,61 @@ land they read as near-black, as in the Shiny app.
 
 ## Place outline
 
-Choosing a sanctuary, reserve or EEZ in **Place & scale** outlines its polygon on the map and fits the
-map to it (`fitBounds` on the preset's `bbox`, `maxZoom` 10); choosing a sea or ocean clears the outline
-and flies to its camera. The 20 places of the [Ocean Metrics
-gazetteer](https://storage.oceanmetrics.io/gazetteer/) have a preset (`place_id` and `bbox` in
-`src/lib/view/regions.ts`): the 18 NOAA sanctuaries and monuments (`NMS:*`; Papahānaumokuākea spans the
-antimeridian, so it keeps its camera and has no `bbox`), Tortugas Ecological Reserve (`PSGID:939`) and the
-Pitcairn EEZ (`MRGID:8439`). Seas and oceans have no gazetteer feature. The selection is the URL key
-`pl=<place_id>` (`AppState.place`), so a link reproduces it and the picker shows it.
+The **Place & scale** picker lists the whole published [Ocean Metrics
+gazetteer](https://storage.oceanmetrics.io/gazetteer/): 14,734 places in 22 collections (NOAA sanctuaries
+and monuments, MPA inventory, BOEM leases and planning areas, CalCOFI lines and stations, maritime limits,
+cables, GEBCO undersea features ...), as one group per collection in the manifest's order, after a
+**Seas & oceans** group of 13 camera presets (world, five oceans, Caribbean, Gulf of Maine, North Sea,
+Mediterranean, Great Barrier Reef, Coral Triangle, Benguela; they have no gazetteer feature). One search box
+searches both: every word must match a place's name or id (case and accents ignored), ranked exact, prefix,
+word prefix, substring (`searchPlaces()` in `src/lib/places/index.ts`). Without a query each group shows
+its first 50 places by name and a "… N more, type to search" row, and `boem_wind_planning_rescinded` and
+`noaa_submarine_cables` (thousands of near-identical rows) stay hidden until the user types.
 
-- **Source**: `https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/gazetteer/places/places.pmtiles`,
-  layer `places` (`place_id`, `name`, `gazetteer`, `area_km2`), read by range requests through the
-  `pmtiles` protocol (`pmtiles` 4.5, the same as erddap-places). The bucket URL is used, not
-  `storage.oceanmetrics.io`: that host answers a 302 without `Access-Control-Allow-Origin`, which browsers
-  reject before following, so range requests through it fail (status 0). The bucket answers 206 with
-  `Access-Control-Allow-Origin: *` and exposes `Content-Range`.
+Choosing a place outlines it on the map, fits the map to its bounds (`fitBounds`, `maxZoom` 10) and credits
+its collection; choosing a sea clears the outline and flies to its camera. The selection is the URL key
+`pl=<place_id>` (`AppState.place`), plus `pc=<collection>` (`AppState.placeColl`) only when the id occurs in
+more than one collection (three `BOEM:OCS-P 056x` ids are in both `boem_wind_leases` and
+`boem_pacific_og_leases`). A pre-0.7.0 link `pl=NMS:MBNMS` still works: the 20 original places are the
+`places` collection of the index. A polygon split at the antimeridian (49 rows have a bbox of -180..180)
+cannot be fitted, so it gets its centroid and a zoom from its latitude span (Papahānaumokuākea keeps its
+hand-set camera, `CAMERA_OVERRIDES`); a point gets zoom 10.
+
+- **Where the data is read from**: the manifest `<bucket>/gazetteer/layers.json` (per collection: `slug`,
+  `title`, `attribution_html`, `license`, `citation`, ... ; its `pmtiles` URL is on the storage host, so it is
+  rewritten to the bucket) and the index `<bucket>/gazetteer/index/places_index.parquet` (1.1 MB; one row per
+  place with `bbox` and centroid). The index is read with the app's DuckDB engine
+  (`loadIndex()`: `SELECT place_id, name, ..., bbox.xmin AS xmin ... FROM read_parquet(<url>)`, no
+  per-row attribution), the first time the Place panel opens or at once when the hash has `pl=`. The picker,
+  the search and the index reader are a lazy chunk (`PlaceGate.svelte` loads `PlacePanel.svelte` and
+  `places/index.ts`; 4.1 KB + 4.4 KB raw), so the static path stays under budget. Places are keyed by
+  (collection, `place_id`): ids repeat across collections, and 86 contain spaces.
+- **Source**: `<bucket>/gazetteer/<collection>/places.pmtiles`, source layer = the collection's slug, feature
+  property `place_id`, read by range requests through the `pmtiles` protocol (`pmtiles` 4.5). The bucket URL
+  is used, not `storage.oceanmetrics.io`: that host answers a 302 without `Access-Control-Allow-Origin`, which
+  browsers reject before following, so range requests through it fail (status 0). The bucket answers 206 with
+  `Access-Control-Allow-Origin: *` and exposes `Content-Range`. The outline map adds a collection's source the
+  first time one of its places is chosen and keeps it; switching collection only changes the filters.
 - **Why a second map.** deck.gl draws the hexagons on its own canvas above every MapLibre layer, and an
   interleaved deck does not run on MapLibre 6 (deck 9.4 reads `map.transform`, gone in 6, and throws on
   every frame). An outline layer on the main map therefore sat under the 85% opaque hexagons and was
   barely visible. `createOutlineMap()` (`src/lib/map/map.ts`) stacks a second, transparent MapLibre map
   (no basemap, `pointer-events: none`) above deck, follows the main camera (centre, zoom, bearing, pitch,
-  padding) on every `move` and `resize`, and draws two line layers filtered by
-  `["==", ["get", "place_id"], <id>]` (a 2.5 px line over a 5 px casing). Its style never changes, so a
-  basemap swap needs nothing re-added; the theme only recolours the lines (white on dark, the kit's
-  `--facet-place` navy on light) and the projection (globe or flat) is mirrored. `.map` is
-  `isolation: isolate` so the outline and deck stay below the Controls and Cell panes. The PNG export
-  draws the outline canvas too.
-- **Attribution**: the tiles' metadata credits NOAA ONMS, MarineRegions.org and ProtectedSeas (license
-  CC-BY-4.0); the outline map has no attribution control of its own, so the main map's control carries
-  that credit as a custom attribution next to OBIS's.
+  padding) on every `move` and `resize`, and per collection draws a 2.5 px line over a 5 px casing for
+  polygons and lines, and a circle for points (filters
+  `["all", ["==", ["get", "place_id"], <id>], ["!=", ["geometry-type"], "Point"]]` and `"=="` for points).
+  Its style never changes, so a basemap swap needs nothing re-added; the theme only recolours the layers
+  (white on dark, the kit's `--facet-place` navy on light) and the projection (globe or flat) is mirrored.
+  `.map` is `isolation: isolate` so the outline and deck stay below the Controls and Cell panes. The PNG
+  export draws the outline canvas too.
+- **Attribution**: the main map's attribution control carries OBIS, the basemap and, for the selected place,
+  `Places: <attribution_html of its collection>` (`creditsFor()`; links open in a new tab, a link already
+  credited elsewhere stays plain text). MapLibre has no setter for a custom attribution, so the control is
+  replaced when the credited collection changes. Help → Data sources lists the gazetteer, with the selected
+  collection's citation and licence from the manifest.
+- **Known limits**: the point tiles of `calcofi_stations` keep one station per tile below z10, so a station
+  is only drawn from zoom 10 (a place of that collection opens at z10). A split polygon's centroid is an
+  average of its two halves, which can fall in the wrong ocean; a published unwrapped bbox would fix it.
 
 ## Legacy URLs
 
@@ -357,7 +384,7 @@ Measured at 0.3.0 (2026-10-08):
 
 | | gzip | budget |
 |---|---|---|
-| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) → 647.7 KB (0.6.0) → 647.7 KB (0.6.1) | 650 KB |
+| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) → 647.7 KB (0.6.0) → 647.7 KB (0.6.1) → 648.1 KB (0.7.0) | 650 KB |
 | runtime worker (MapLibre's) | 140.2 KB | 150 KB |
 | fonts and images (the kit's nine woff2 faces and the MBON wordmark; 0.4.0) | 538.1 KB raw | 600 KB |
 | DuckDB-WASM (lazy: JS chunk 45 KB, wasm ~7.8 MB) | not counted | must stay lazy |
@@ -370,12 +397,19 @@ globe toggle, legacy links) added 4 KB and 0.3.0 (the WoRMS taxon search and sub
 6.5 KB of CSS (gzip), within the 650 KB budget. The kit's self-hosted fonts and wordmark are in the
 static graph as assets; they are already compressed, never parsed as script and fetched per face on
 use, so they got their own 600 KB budget (`FONT_IMAGE_BUDGET_BYTES`) instead of a raise of the code
-budget. 0.5.2 (the place outline) added 9.2 KB, almost all of it `pmtiles` and its `fflate`; 3.2 KB of headroom remained. 0.6.0 (the async `latest.json` resolver, the `@marinebon/ui` 0.3.0 bump; the feedback code is lazy) added 0.9 KB, leaving 2.3 KB; the budget is unchanged. 0.5.0 (welcome card, tour, Help modals, feedback bubble) added 6.3 KB; the feedback dialog and
+budget. 0.5.2 (the place outline) added 9.2 KB, almost all of it `pmtiles` and its `fflate`; 3.2 KB of headroom remained. 0.6.0 (the async `latest.json` resolver, the `@marinebon/ui` 0.3.0 bump; the feedback code is lazy) added 0.9 KB, leaving 2.3 KB; the budget is unchanged. 0.7.0 (the gazetteer picker) added 0.4 KB to the entry (leaving 1.9 KB): the picker, search and index reader are the lazy `PlacePanel` and `places` chunks (2.0 + 2.2 KB gzip, not counted), reached from `PlaceGate`; keeping them out of the entry saved the 1.4 KB that put it at 649.5 KB when they were static. 0.5.0 (welcome card, tour, Help modals, feedback bubble) added 6.3 KB; the feedback dialog and
 `html-to-image` are a dynamic `import()`, and `fontEmbedCSS` (an html-to-image identifier) is a
 forbidden marker in the static graph, like DuckDB's bundle names.
 
 ## Versions
 
+- **0.7.0**: the Place & scale picker lists the whole Ocean Metrics gazetteer (14,734 places in 22
+  collections, from `layers.json` and `places_index.parquet`) instead of 20 presets, after a "Seas &
+  oceans" group of the 13 camera presets. A chosen place fits the map to its bounds, is outlined from its
+  collection's PMTiles (lines and points too) and credited from the manifest. `pl=` takes any gazetteer id
+  (spaces percent-encoded) and `pc=<collection>` is written when an id is in more than one collection.
+  Old `pl=NMS:...` links still open. The picker and index code are a lazy chunk (entry 647.7 to 648.1 KB
+  gzip of 650 KB). See "Place outline".
 - **0.6.1**: the title sentence loses its two qualifiers: "(OBIS 2026-07-28)" after the years and
   "(res N, auto)" after the hexagons; it reads "All taxa, all years, worldwide, ~610,000 km² hexagons:
   ES(50)". The footer carries both (`OBIS 2026-07-28 · data 2026-10-07 · release v20260728 · res 1

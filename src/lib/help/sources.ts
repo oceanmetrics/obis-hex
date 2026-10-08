@@ -9,7 +9,22 @@ export interface Source {
   doi?: string;
 }
 
-export function sources(o: { snapshot?: string | null; release?: string | null; builtAt?: string | null; year: string }): Source[] {
+/** the selected gazetteer collection (manifest `title`, `citation`, `license`, `license_url`) */
+export interface PlaceSource {
+  title: string;
+  citation: string;
+  license: string;
+  license_url: string;
+}
+
+export function sources(o: {
+  snapshot?: string | null;
+  release?: string | null;
+  builtAt?: string | null;
+  year: string;
+  /** the collection of the outlined place, when one is selected (0.7.0) */
+  place?: PlaceSource | null;
+}): Source[] {
   return [
     {
       name: "OBIS",
@@ -37,6 +52,16 @@ export function sources(o: { snapshot?: string | null; release?: string | null; 
       role: "Dark Matter and Positron basemaps.",
       citation: "© CARTO, © OpenStreetMap contributors",
       licence: "OpenStreetMap data: ODbL",
+    },
+    {
+      name: "Ocean Metrics gazetteer",
+      href: "https://storage.oceanmetrics.io/gazetteer/",
+      role: o.place
+        ? `The places of the Place & scale picker (14,000+ in 22 collections); the outlined one is from the collection "${o.place.title}".`
+        : "The places of the Place & scale picker (14,000+ in 22 collections: sanctuaries, monuments, leases, planning areas, maritime limits, CalCOFI lines, undersea features), outlined on the map from per-collection PMTiles.",
+      ...(o.place
+        ? { citation: o.place.citation, licence: o.place.license_url ? `${o.place.license} (${o.place.license_url})` : o.place.license }
+        : {}),
     },
     {
       name: "Software",

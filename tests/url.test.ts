@@ -24,6 +24,7 @@ describe("URL hash state", () => {
       cellOpen: true,
       labels: false,
       place: "NMS:MBNMS",
+      placeColl: null,
     };
     expect(parseHash(formatHash(s))).toEqual(s);
   });
@@ -121,7 +122,7 @@ describe("layout keys (0.4.0 MBON re-layout)", () => {
     }
   });
   it("writes the layout keys only when they differ from the default, after the eight view keys", () => {
-    expect(formatHash(DEFAULT_STATE)).not.toMatch(/[&#](g|k|cc|tc|x|xo|b|pl)=/);
+    expect(formatHash(DEFAULT_STATE)).not.toMatch(/[&#](g|k|cc|tc|x|xo|b|pl|pc)=/);
     const h = formatHash({ ...DEFAULT_STATE, tab: "indicator", ctlFolded: true, cell: "8a2a1072b59ffff", labels: false });
     expect(h.endsWith("&k=indicator&cc=1&x=8a2a1072b59ffff&b=0")).toBe(true);
   });
@@ -137,18 +138,51 @@ describe("layout keys (0.4.0 MBON re-layout)", () => {
       { place: "NMS:FKNMS" },
       { place: "MRGID:8439" },
       { place: "PSGID:939" },
+      { place: "BOEM:OCS-P 0561" },
+      { place: "BOEM:OCS-P 0561", placeColl: "boem_wind_leases" },
+      { place: "ONMS:channel-islands-national-marine-sanctuary:northern-section" },
+      { place: "CALCOFI:line-060.0" },
     ];
     for (const c of cases) {
       const s = { ...DEFAULT_STATE, ...c };
       expect(parseHash(formatHash(s)), JSON.stringify(c)).toEqual(s);
     }
   });
-  it("pl= is written last, only when a place is set, and an unknown id is dropped", () => {
+  it("pl= is written last, only when a place is set, and an id outside the alphabet is dropped", () => {
     const h = formatHash({ ...DEFAULT_STATE, labels: false, place: "NMS:MBNMS" });
     expect(h.endsWith("&b=0&pl=NMS:MBNMS")).toBe(true);
     expect(formatHash(DEFAULT_STATE)).not.toContain("pl=");
-    for (const bad of ["pl=", "pl=MBNMS", "pl=XYZ:1", "pl=NMS:", "pl=NMS:a'b", "pl=NMS:" + "A".repeat(40)])
+    for (const bad of ["pl=", "pl=a'b", "pl=a<b>", "pl=a;b", "pl=a%2Fb", "pl=%00", "pl=" + "A".repeat(81)])
       expect(parseHash("#" + bad).place, bad).toBeNull();
+  });
+  it("regression: ids with spaces, several colons, dots and up to 80 characters round-trip (0.7.0)", () => {
+    const ids = [
+      "BOEM:OCS-P 0561",
+      "MC:monuments:alice-springs",
+      "ONMS:channel-islands-national-marine-sanctuary:santa-barbara-section",
+      "CALCOFI:line-060.0",
+      "GEBCO:1001",
+      "A".repeat(80),
+    ];
+    for (const place of ids) {
+      const h = formatHash({ ...DEFAULT_STATE, place });
+      expect(parseHash(h).place, place).toBe(place);
+    }
+    const h = formatHash({ ...DEFAULT_STATE, place: "BOEM:OCS-P 0561" });
+    expect(h.endsWith("&pl=BOEM:OCS-P%200561")).toBe(true); // ":" literal, the space percent-encoded
+    expect(parseHash("#pl=BOEM:OCS-P%200561").place).toBe("BOEM:OCS-P 0561");
+    expect(parseHash("#pl=BOEM:OCS-P+0561").place).toBe("BOEM:OCS-P 0561");
+  });
+  it("pc= follows pl=, only when set, and only with a place and a valid slug (0.7.0)", () => {
+    const s = { ...DEFAULT_STATE, place: "BOEM:OCS-P 0562", placeColl: "boem_wind_leases" };
+    const h = formatHash(s);
+    expect(h.endsWith("&pl=BOEM:OCS-P%200562&pc=boem_wind_leases")).toBe(true);
+    expect(parseHash(h)).toEqual(s);
+    expect(formatHash({ ...DEFAULT_STATE, place: "NMS:MBNMS" })).not.toContain("pc=");
+    expect(formatHash({ ...DEFAULT_STATE, placeColl: "places" })).not.toContain("pc=");
+    expect(parseHash("#pc=boem_wind_leases").placeColl).toBeNull(); // no place
+    for (const bad of ["pc=", "pc=Bad", "pc=a-b", "pc=1abc", "pc=a b", "pc=" + "a".repeat(65)])
+      expect(parseHash("#pl=NMS:MBNMS&" + bad).placeColl, bad).toBeNull();
   });
   it("junk layout values fall back to defaults", () => {
     const s = parseHash("#k=nope&cc=yes&tc=2&x=zz12&xo=true&b=off");

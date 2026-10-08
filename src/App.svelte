@@ -72,7 +72,6 @@
   import TitleSentence from "./components/TitleSentence.svelte";
   import TaxonPanel from "./components/TaxonPanel.svelte";
   import PeriodPicker from "./components/PeriodPicker.svelte";
-  import PlacePanel from "./components/PlacePanel.svelte";
   import ScalePanel from "./components/ScalePanel.svelte";
   import IndicatorPanel from "./components/IndicatorPanel.svelte";
   import SharePanel from "./components/SharePanel.svelte";
@@ -89,6 +88,9 @@
     type DecadeCount,
   } from "./lib/release/decades";
   import type { Region } from "./lib/view/regions";
+  import type { PlaceData, PlaceRow } from "./lib/places/index";
+  import { OBIS_CREDIT } from "./lib/places/urls";
+  import PlaceGate from "./components/PlaceGate.svelte";
   import { downloadCanvas, pngName, stampPng } from "./lib/export/png";
   import { citeText, citeYear, dataDateText, footerReleaseText } from "./lib/export/cite";
   import { RES_DECADE_MAX } from "./lib/state/resolution";
@@ -378,8 +380,42 @@
   $effect(() => {
     handle?.setLabels(st.labels);
   });
+  // the gazetteer (manifest + index): the picker, its search and the index reader are a lazy chunk,
+  // fetched the first time the Place panel opens or at once when a link carries pl=; the outline, its
+  // credit and the picker's selection come from it
+  let placeApi = $state.raw<typeof import("./lib/places/index") | null>(null);
+  let PlacePanelC = $state.raw<Component<any> | null>(null);
+  let placeData = $state.raw<PlaceData | null>(null);
+  let placeError = $state("");
+  let placeBusy = false;
+  function needPlaces() {
+    if (placeData || placeBusy) return;
+    placeBusy = true;
+    Promise.all([import("./lib/places/index"), import("./components/PlacePanel.svelte")])
+      .then(async ([api, panel]) => {
+        placeApi = api;
+        PlacePanelC = panel.default;
+        placeData = await api.ensurePlaces(engine);
+        placeError = "";
+      })
+      .catch((e) => (placeError = e instanceof Error ? e.message : String(e)))
+      .finally(() => (placeBusy = false));
+  }
   $effect(() => {
-    handle?.setPlace(st.place);
+    if (st.place || st.tab === "place") untrack(needPlaces);
+  });
+  const placeRow = $derived(placeApi && placeData && st.place ? placeApi.resolvePlace(st.place, placeData.rows, st.placeColl) : null);
+  const placeTarget = $derived(
+    placeApi && placeData && placeRow
+      ? {
+          collection: placeRow.collection,
+          place_id: placeRow.place_id,
+          credit: placeApi.creditsFor(placeRow.collection, placeData.layers, [OBIS_CREDIT]),
+        }
+      : null,
+  );
+  $effect(() => {
+    handle?.setPlace(placeTarget);
   });
   // keep the map's centre above the Time strip (laptop and wider; on a phone the panes are sheets)
   $effect(() => {
@@ -551,18 +587,29 @@
   }
 
   function goTo(r: Region) {
-    // a gazetteer place is outlined, and the map fits its bounds so the whole outline is in view;
-    // a sea or ocean clears the outline and flies to its camera
-    st.place = r.place_id ?? null;
-    if (r.bbox)
+    // a sea or ocean clears the outlined place and flies to its camera
+    st.place = null;
+    st.placeColl = null;
+    handle?.map.flyTo({ center: [r.lon, r.lat], zoom: r.zoom, essential: true });
+  }
+
+  function goPlace(row: PlaceRow) {
+    // a gazetteer place is outlined and credited, and the map fits its bounds so the whole outline is in
+    // view (a polygon split at the antimeridian gets a centre and zoom); pc= is written only when the
+    // id also occurs in another collection
+    st.place = row.place_id;
+    st.placeColl = placeData && placeApi?.isAmbiguous(placeData.rows, row.place_id) ? row.collection : null;
+    const cam = placeApi!.cameraFor(row);
+    if ("bounds" in cam) {
+      const [w, so, e, n] = cam.bounds;
       handle?.map.fitBounds(
         [
-          [r.bbox[0], r.bbox[1]],
-          [r.bbox[2], r.bbox[3]],
+          [w, so],
+          [e, n],
         ],
         { padding: 60, maxZoom: 10, essential: true },
       );
-    else handle?.map.flyTo({ center: [r.lon, r.lat], zoom: r.zoom, essential: true });
+    } else handle?.map.flyTo({ center: cam.center, zoom: cam.zoom, essential: true });
   }
 
   async function savePng() {
@@ -709,7 +756,7 @@
       theme: st.theme,
       projection: st.proj,
       labels: st.labels,
-      place: st.place,
+      place: null,
       center: [st.lon, st.lat],
       zoom: st.zoom,
       onView: (v) => {
@@ -799,7 +846,8 @@
         <PeriodPicker bind:st allowed={decadesAllowed} reason={decadeReason} onpicked={close} />
       {/snippet}
       {#snippet place(close)}
-        <PlacePanel note={placeNote()} placeId={st.place} maxHeight="12rem" ongo={(r) => { goTo(r); close(); }} />
+        <PlaceGate panel={PlacePanelC} note={placeNote()} placeId={st.place} placeColl={st.placeColl} data={placeData} error={placeError} onneed={needPlaces}
+          maxHeight="12rem" onsea={(r) => { goTo(r); close(); }} onplace={(r) => { goPlace(r); close(); }} />
       {/snippet}
       {#snippet scale()}
         <ScalePanel bind:st autoRes={autoResNow} {res} {resMax} />
@@ -853,7 +901,8 @@
           <TaxonPanel bind:st {items} {h3tBase} {h3tHealth} {aphiaInfo} {aphiaAccepted} />
         {:else if id === "place"}
           <div class="tab">
-            <PlacePanel note={placeNote()} placeId={st.place} maxHeight="9rem" ongo={goTo} />
+            <PlaceGate panel={PlacePanelC} note={placeNote()} placeId={st.place} placeColl={st.placeColl} data={placeData} error={placeError} onneed={needPlaces}
+              maxHeight="9rem" onsea={goTo} onplace={goPlace} />
             <div>
               <span class="mbon-label">hexagon size</span>
               <ScalePanel bind:st autoRes={autoResNow} {res} {resMax} />
@@ -950,7 +999,7 @@
       {:else if helpModal === "sources"}
         <table class="sources">
           <tbody>
-            {#each sources({ snapshot: release?.obis_snapshot ?? null, release: release?.release ?? null, builtAt: dataDate, year: citeYear(release?.obis_snapshot) }) as src (src.name)}
+            {#each sources({ snapshot: release?.obis_snapshot ?? null, release: release?.release ?? null, builtAt: dataDate, year: citeYear(release?.obis_snapshot), place: placeApi && placeData ? placeApi.citationFor(placeRow?.collection ?? null, placeData.layers) : null }) as src (src.name)}
               <tr>
                 <th scope="row"><a href={src.href} target="_blank" rel="noopener">{src.name}</a></th>
                 <td>

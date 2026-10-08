@@ -1,0 +1,73 @@
+{
+ "schema": 1,
+ "generated": "2026-10-08T16:21:05Z",
+ "base": "https://storage.oceanmetrics.io/gazetteer/",
+ "layers": [
+  {
+   "slug": "boem_wind_leases",
+   "title": "BOEM offshore wind lease outlines",
+   "collection": "boem_wind_leases",
+   "pmtiles": "https://storage.oceanmetrics.io/gazetteer/boem_wind_leases/places.pmtiles",
+   "source_layer": "boem_wind_leases",
+   "geom_type": "MultiPolygon",
+   "n": 3,
+   "authority": "BOEM",
+   "place_type": "lease",
+   "bbox": [
+    -121.9,
+    34.5,
+    -73.9,
+    39.5
+   ],
+   "attribution": "<a href=\"https://www.boem.gov/renewable-energy\">BOEM</a>, via MarineCadastre.gov. Public domain. Processed by Ocean Metrics.",
+   "attribution_html": "<a href=\"https://www.boem.gov/renewable-energy\">BOEM</a>, via MarineCadastre.gov. Public domain. Processed by Ocean Metrics.",
+   "license": "CC-PDDC",
+   "license_url": "https://www.usa.gov/publicdomain/label/1.0/",
+   "citation": "BOEM, via MarineCadastre.gov. BOEM offshore wind lease outlines, v1.0.0. Ocean Metrics gazetteer, 2026."
+  },
+  {
+   "slug": "places",
+   "title": "Places",
+   "collection": "places",
+   "pmtiles": "https://storage.oceanmetrics.io/gazetteer/places/places.pmtiles",
+   "source_layer": "places",
+   "geom_type": "MultiPolygon",
+   "n": 4,
+   "authority": "NMS",
+   "place_type": null,
+   "bbox": [
+    -180,
+    -28.42,
+    180,
+    37.88
+   ],
+   "attribution": "<a href=\"https://sanctuaries.noaa.gov\">NOAA ONMS</a>, <a href=\"https://obis.org\">OBIS</a>, <a href=\"https://protectedseas.net\">ProtectedSeas</a>. Processed by Ocean Metrics.",
+   "attribution_html": "<a href=\"https://sanctuaries.noaa.gov\">NOAA ONMS</a>, <a href=\"https://obis.org\">OBIS</a>, <a href=\"https://protectedseas.net\">ProtectedSeas</a>. Processed by Ocean Metrics.",
+   "license": "CC-BY-4.0",
+   "license_url": "https://creativecommons.org/licenses/by/4.0/",
+   "citation": "NOAA ONMS, MarineRegions.org, ProtectedSeas. Places, v1.0.0. Ocean Metrics gazetteer, 2026."
+  },
+  {
+   "slug": "boem_wind_planning_rescinded",
+   "title": "BOEM offshore wind planning areas (rescinded 2025-07-30)",
+   "collection": "boem_wind_planning_rescinded",
+   "pmtiles": "https://storage.oceanmetrics.io/gazetteer/boem_wind_planning_rescinded/places.pmtiles",
+   "source_layer": "boem_wind_planning_rescinded",
+   "geom_type": "MultiPolygon",
+   "n": 2,
+   "authority": "BOEM",
+   "place_type": "planning_area",
+   "bbox": [
+    -70.1,
+    41.5,
+    -69.8,
+    42.5
+   ],
+   "attribution": "<a href=\"https://www.boem.gov/renewable-energy\">BOEM</a>. Processed by Ocean Metrics.",
+   "attribution_html": "<a href=\"https://www.boem.gov/renewable-energy\">BOEM</a>. Processed by Ocean Metrics.",
+   "license": "CC-PDDC",
+   "license_url": "https://www.usa.gov/publicdomain/label/1.0/",
+   "citation": "BOEM. Rescinded planning areas, v1.0.0."
+  }
+ ]
+}

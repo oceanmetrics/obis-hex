@@ -13,7 +13,10 @@
 //   x=<h3>                    the selected cell (lights the Cell pill)
 //   xo=1                      the Cell pane open
 //   b=0                       basemap labels off
-//   pl=<place_id>             the outlined gazetteer place (0.5.2), e.g. pl=NMS:MBNMS
+//   pl=<place_id>             the outlined gazetteer place (0.5.2), e.g. pl=NMS:MBNMS; since 0.7.0 any id of
+//                             the gazetteer index, percent-encoded (`pl=BOEM:OCS-P%200561`)
+//   pc=<collection>           the gazetteer collection of `pl`, written only when the id occurs in more than
+//                             one collection (0.7.0); `pl` alone opens the first collection that has it
 import { isIndicator, parseLayerKey, layerKey, type Indicator } from "../data/layers";
 import { RES_MAX } from "./resolution";
 
@@ -24,12 +27,16 @@ export const TABS = ["taxon", "place", "indicator", "share"] as const;
 export type Tab = (typeof TABS)[number];
 
 /** the hash keys of the layout state, written only when not at their default */
-export const LAYOUT_KEYS = ["k", "cc", "tc", "x", "xo", "b", "pl"] as const;
+export const LAYOUT_KEYS = ["k", "cc", "tc", "x", "xo", "b", "pl", "pc"] as const;
 
 const H3_RE = /^[0-9a-f]{15}$/;
-/** an Ocean Metrics gazetteer place id: `NMS:MBNMS`, `MRGID:8439`, `PSGID:939`. It goes into a map
- * filter only, never into SQL; anything else in a link is dropped. */
-export const PLACE_ID_RE = /^(NMS|MRGID|PSGID):[A-Za-z0-9_-]{1,16}$/;
+/** an Ocean Metrics gazetteer place id, the alphabet of the whole index: `NMS:MBNMS`, `MRGID:8439`,
+ * `GEBCO:1001`, `BOEM:OCS-P 0561`, `ONMS:channel-islands-national-marine-sanctuary:northern-section`
+ * (letters, digits and `: _ - .` and spaces; 1-80 characters). It goes into a map filter only, never
+ * into SQL; anything else in a link is dropped. */
+export const PLACE_ID_RE = /^[A-Za-z0-9:_. -]{1,80}$/;
+/** a gazetteer collection slug (`boem_wind_leases`), the `pc=` value */
+export const PLACE_COLL_RE = /^[a-z][a-z0-9_]{0,63}$/;
 
 export interface AppState {
   indicator: Indicator;
@@ -61,8 +68,10 @@ export interface AppState {
   cellOpen: boolean;
   /** basemap labels (place names) drawn over the hexagons */
   labels: boolean;
-  /** the gazetteer place whose polygon is outlined on the map; null = none */
+  /** the gazetteer place whose geometry is outlined on the map; null = none */
   place: string | null;
+  /** its collection, set only when `place` occurs in more than one collection; null otherwise */
+  placeColl: string | null;
 }
 
 export const DEFAULT_STATE: AppState = {
@@ -85,6 +94,7 @@ export const DEFAULT_STATE: AppState = {
   cellOpen: false,
   labels: true,
   place: null,
+  placeColl: null,
 };
 
 const round = (x: number, d: number) => Number(x.toFixed(d));
@@ -111,6 +121,7 @@ export function formatHash(s: AppState): string {
   if (s.cellOpen) p.push(["xo", "1"]);
   if (!s.labels) p.push(["b", "0"]);
   if (s.place) p.push(["pl", s.place]);
+  if (s.place && s.placeColl) p.push(["pc", s.placeColl]);
   return `#${p.map(([k, v]) => `${k}=${k === "l" ? v : encodeURIComponent(v).replace(/%2C/g, ",").replace(/%3A/g, ":")}`).join("&")}`;
 }
 
@@ -181,6 +192,8 @@ export function parseHash(hash: string): AppState {
   if (p.get("b") === "0") s.labels = false;
   const pl = p.get("pl") ?? "";
   if (PLACE_ID_RE.test(pl)) s.place = pl;
+  const pc = p.get("pc") ?? "";
+  if (s.place && PLACE_COLL_RE.test(pc)) s.placeColl = pc;
   return s;
 }
 

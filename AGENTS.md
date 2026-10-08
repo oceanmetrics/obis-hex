@@ -29,6 +29,12 @@ Conventions for anyone (human or agent) changing obis-hex.
   every downstream panel treats it like a partition. Never call the service without a bbox at
   res >= 6, keep the request URL's parameter order fixed (it is the cache key, in DuckDB and
   in Varnish), and handle 413 by stepping down a resolution, not by retrying.
+- **Places come from the gazetteer, not from code.** The Place picker lists `layers.json` and
+  `places_index.parquet` (`src/lib/places/index.ts`); never add a place to `regions.ts` (it holds only the
+  sea and ocean cameras). A place is keyed by (collection, `place_id`): ids repeat across collections, so
+  `pl=` carries `pc=` when it is ambiguous. Read PMTiles from the bucket host (`pmtilesUrl()`), never
+  `storage.oceanmetrics.io` (302 without CORS). `places/index.ts` and `PlacePanel.svelte` are a lazy chunk:
+  the always-loaded code (`App.svelte`, `map.ts`) reaches them by `import()` or `places/urls.ts` only.
 - **The UI is `@marinebon/ui`** (pinned `github:marinebon/ui#v0.3.0`; read its AGENTS.md before adding a
   control). Use its components and semantic tokens (`--bg-surface`, `--text-body`, …), never a new hex
   value; the pipeline order is taxon (dataset) → place → indicator (method) → share (delivery). A
@@ -64,11 +70,12 @@ Conventions for anyone (human or agent) changing obis-hex.
 | path | what |
 |---|---|
 | `src/App.svelte` | the shell: `st` (AppState), derived view, loading effects, map wiring; Header, title sentence, Controls, Cell pane, Time strip, Footer |
-| `src/components/` | TitleSentence (chips), TaxonPanel, PeriodPicker, PlacePanel, ScalePanel, IndicatorPanel, SharePanel, SqlPanel, CellPanel, DecadeBars, AphiaSearch |
+| `src/components/` | TitleSentence (chips), TaxonPanel, PeriodPicker, PlacePanel (lazy, behind PlaceGate), ScalePanel, IndicatorPanel, SharePanel, SqlPanel, CellPanel, DecadeBars, AphiaSearch |
 | `src/lib/view/sentence.ts` | the title sentence parts and text, hexagon areas, the coverage line |
 | `src/lib/data/taxa.ts` | the taxon picker rows (groups, counts, common names, log bars) |
 | `src/lib/release/decades.ts` | records per decade (sum of `n` of the res-1 decade files), brush ⇄ decade |
-| `src/lib/view/regions.ts` | the "go to" regions; those with a `place_id` (and `bbox`) are outlined from the gazetteer |
+| `src/lib/view/regions.ts` | the 13 "Seas & oceans" camera presets (no gazetteer feature) |
+| `src/lib/places/` | the gazetteer as the Place picker's source: `index.ts` (manifest, index read through the engine, search, picker groups, camera, credits; lazy), `urls.ts` (bucket URLs, `pmtilesUrl`, always loaded) |
 | `src/lib/export/` | the title-stamped PNG, the Cite this data text (release citation + OBIS line) |
 | `src/lib/help/` | tour stops and keys (`tour.ts`), `?tour=`/`?modal=` and the welcome views (`start.ts`), shortcuts (`keys.ts`), data sources (`sources.ts`) |
 | `src/lib/feedback/` | the GitHub issue URL and report text (`issue.ts`), mark-up drawing (`annotate.ts`) and colours (`colors.ts`), the endpoint (`endpoint.ts`), what Send and the notice do (`sendState.ts`), POST body (`payload.ts`) and client (`postFeedback.ts`), the lazy screenshot (`capture.ts`) |
@@ -85,7 +92,7 @@ Conventions for anyone (human or agent) changing obis-hex.
 | `src/lib/release/manifest.ts` | `files.parquet` index and lookup |
 | `src/lib/engine/` | DuckDB-WASM engine (`engine.ts`), bundles, SQL builders |
 | `src/lib/color/ramp.ts` | viridis, p02–p98 domain, quantiles, view stats |
-| `src/lib/map/` | MapLibre + deck.gl overlay (flat or globe projection); `H3HexagonLayer` builder; the gazetteer outline map above deck (`createOutlineMap`) |
+| `src/lib/map/` | MapLibre + deck.gl overlay (flat or globe projection); `H3HexagonLayer` builder; the gazetteer outline map above deck (`createOutlineMap`, one source per collection) |
 | `scripts/size-budget*.mjs` | the bundle-size gate (from MarineSensitivity/atlas) |
 | `scripts/figures.mjs` | `npm run figures`: paper 2's figures from URL states → `figures/figA_*.png` |
 | `docs/redirect.md` | the Caddy redirect for app.marinesensitivity.org/h3-db and the legacy mapping table |
