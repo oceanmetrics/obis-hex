@@ -4,31 +4,30 @@
   // view with a minimal mark-up (rectangle, arrow, text, in one of three colours), and the ways out.
   // With an endpoint configured (endpoint.ts; runbook: erddap-places docs/feedback.md) Send posts to the shared Ocean Metrics
   // Apps Script: a Sheet row, mail to the team and a GitHub issue. The email is optional, goes to the
-  // Sheet and the mail only, and is never put in the issue. Without an endpoint, or when the POST
-  // fails, the old routes remain: open a prefilled GitHub issue (the image goes to the clipboard to
-  // paste in), copy the report, download the PNG.
+  // Sheet and the mail only, and is never put in the issue. Send is the one button, always shown.
+  // Without an endpoint it is disabled, and when the POST fails, a notice line under it links to
+  // a prefilled GitHub issue (the image goes to the clipboard to paste in).
   import { Button } from "@marinebon/ui";
   import Modal from "./Modal.svelte";
   import { drawMark, MARK_TOOLS, strokeScale, toImage, type Mark, type MarkTool } from "../lib/feedback/annotate";
   import { DEFAULT_MARK_COLOR, MARK_COLORS } from "../lib/feedback/colors";
-  import { issueUrl, KIND_TITLE, reportBody, type FeedbackKind, type FeedbackReport } from "../lib/feedback/issue";
+  import { issueUrl, KIND_TITLE, type FeedbackKind, type FeedbackReport } from "../lib/feedback/issue";
   import { toBlob } from "../lib/feedback/capture";
   import { feedbackEndpoint } from "../lib/feedback/endpoint";
   import { buildFeedbackPayload, fitImage, isEmail } from "../lib/feedback/payload";
   import { postFeedback } from "../lib/feedback/postFeedback";
+  import { sendUi } from "../lib/feedback/sendState";
 
   let {
     open = $bindable(false),
     kind,
     image,
     report,
-    filename = "obis-hex_feedback.png",
   }: {
     open: boolean;
     kind: FeedbackKind;
     image: HTMLCanvasElement | null;
     report: () => Omit<FeedbackReport, "note" | "kind">;
-    filename?: string;
   } = $props();
 
   let note = $state("");
@@ -108,10 +107,16 @@
     return { ...r, kind, note, url: includeUrl ? r.url : "" };
   };
   const emailOk = $derived(!email.trim() || isEmail(email));
-  const canSend = $derived(!!endpoint && !!note.trim() && emailOk && sending !== "sending" && sending !== "sent");
+  const hintText = $derived(
+    status ||
+      (endpoint
+        ? "Send files your note and the picture with the team and as a public issue on GitHub. Your email, if you give one, goes to the team only; it is never put in the issue."
+        : ""),
+  );
+  const ui = $derived(sendUi({ endpoint, note, emailOk, phase: sending }));
 
   async function send() {
-    if (!endpoint || !canSend) return;
+    if (!endpoint || ui.disabled) return;
     sending = "sending";
     status = "Sending…";
     paint();
@@ -138,7 +143,7 @@
       status = res.issueUrl ? `Sent. Thank you. It is on GitHub as ${res.issueUrl}` : "Sent. Thank you.";
     } else {
       sending = "failed";
-      status = `${res.error ?? "It could not be sent"}. Nothing was lost: use Open a GitHub issue, Copy report or Download PNG instead.`;
+      status = `${res.error ?? "It could not be sent"}. Nothing was lost: open a GitHub issue instead.`;
     }
   }
   async function pngBlob(): Promise<Blob | null> {
@@ -146,51 +151,26 @@
     paint();
     return toBlob(cv);
   }
-  async function clip(text: string | null, png: Blob | null): Promise<boolean> {
-    try {
-      const parts: Record<string, Blob> = {};
-      if (text !== null) parts["text/plain"] = new Blob([text], { type: "text/plain" });
-      if (png) parts["image/png"] = png;
-      if (!Object.keys(parts).length) return false;
-      await navigator.clipboard.write([new ClipboardItem(parts)]);
-      return true;
-    } catch {
-      if (text !== null) {
-        try {
-          await navigator.clipboard.writeText(text);
-        } catch {
-          return false;
-        }
-      }
-      return false;
-    }
-  }
 
+  // the fallback link: a prefilled GitHub issue, with the screenshot on the clipboard to paste in
   async function openIssue() {
     const r = full();
     const png = await pngBlob();
-    const ok = png ? await clip(null, png) : false;
+    let ok = false;
+    if (png) {
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
+        ok = true;
+      } catch {
+        ok = false;
+      }
+    }
     window.open(issueUrl(r), "_blank", "noopener");
     status = png
       ? ok
         ? "The issue opened in a new tab. The screenshot is on your clipboard: paste it into the issue."
-        : "The issue opened in a new tab. The screenshot could not be copied: use Download PNG and drag it into the issue."
+        : "The issue opened in a new tab. The browser would not copy the screenshot; untick \"include the screenshot\" or attach one yourself."
       : "The issue opened in a new tab.";
-  }
-  async function copyReport() {
-    const png = await pngBlob();
-    const ok = await clip(reportBody(full(), { paste: false }), png);
-    status = ok ? `Copied the report${png ? " and the screenshot" : ""}.` : "Copied the text (the browser would not copy the image; use Download PNG).";
-  }
-  async function download() {
-    const png = await pngBlob();
-    if (!png) return;
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(png);
-    a.download = filename;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    status = "Downloaded.";
   }
 </script>
 
@@ -237,18 +217,12 @@
     <label class="keep"><input type="checkbox" bind:checked={includeUrl} /> include a link to this view</label>
 
     <div class="row">
-      {#if endpoint}
-        <Button variant="primary" size="sm" disabled={!canSend} onclick={send}>{sending === "sending" ? "Sending…" : sending === "sent" ? "Sent" : "Send"}</Button>
-      {/if}
-      {#if !endpoint || sending === "failed"}
-        <Button variant={endpoint ? "quiet" : "primary"} size="sm" onclick={openIssue}>Open a GitHub issue</Button>
-      {/if}
-      <Button variant="quiet" size="sm" onclick={copyReport}>Copy report</Button>
-      <Button variant="quiet" size="sm" disabled={!image || !keep} onclick={download}>Download PNG</Button>
+      <Button variant="primary" size="sm" disabled={ui.disabled} onclick={send}>{sending === "sending" ? "Sending…" : sending === "sent" ? "Sent" : "Send"}</Button>
     </div>
-    <p class="hint" aria-live="polite" data-send={sending}>{status || (endpoint
-      ? "Send files your note and the picture with the team and as a public issue on GitHub. Your email, if you give one, goes to the team only; it is never put in the issue."
-      : "Open a GitHub issue to send this: it opens prefilled with the note, the release, window size and theme (and the view's link if ticked).")}</p>
+    {#if ui.notice}
+      <p class="hint notice" data-notice>{ui.notice.before}<button type="button" class="linkish" onclick={openIssue}>{ui.notice.link}</button>{ui.notice.after}</p>
+    {/if}
+    <p class="hint" aria-live="polite" data-send={sending} hidden={!hintText}>{hintText}</p>
   </div>
 </Modal>
 
@@ -276,5 +250,7 @@
   .shot.off { opacity: 0.35; }
   .keep { display: flex; gap: var(--space-1); align-items: center; }
   .row { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+  .linkish { all: unset; cursor: pointer; color: var(--link, var(--text-strong)); text-decoration: underline; }
+  .linkish:focus-visible { outline: 2px solid var(--text-strong); outline-offset: 2px; }
   .hint { margin: 0; color: var(--text-muted); font: var(--text-xs) / 1.4 var(--font-sans); }
 </style>

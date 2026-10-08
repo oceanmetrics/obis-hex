@@ -1,7 +1,8 @@
 // the title sentence: what the map shows, in the pipeline order dataset → place → method, as
 // parts the app renders as Chips (and as plain text for the PNG stamp and the figures log):
 //
-//   Seabirds (EOV), all years (OBIS 2026-07-28), worldwide, ~12,400 km² hexagons (res 3): ES(50)
+//   Seabirds (EOV), all years, worldwide, ~12,400 km² hexagons: ES(50)
+//   (the OBIS snapshot and the resolution live in the footer: `releaseLine()`)
 //   9,196 of 26,361 hexagons have ≥ 50 records
 import { getHexagonAreaAvg } from "h3-js";
 import { EOVS, INDICATORS, type Indicator, type LayerSel } from "../data/layers";
@@ -48,11 +49,8 @@ export function taxonPart(sel: LayerSel, aphia?: { name: string; rank: string } 
     : { label: sel.taxon, qual: `(${sel.rank})` };
 }
 
-export function periodPart(decade: number | null, snapshot?: string | null): SentencePart {
-  return {
-    label: decade === null ? "all years" : `${decade}s`,
-    qual: snapshot ? `(OBIS ${snapshot})` : "",
-  };
+export function periodPart(decade: number | null): SentencePart {
+  return { label: decade === null ? "all years" : `${decade}s`, qual: "" };
 }
 
 /** "worldwide" when the whole layer is loaded (one file, the counts cover the globe); "in view"
@@ -65,8 +63,13 @@ export function placePart(inView: boolean, parts?: { loaded: number; total: numb
   };
 }
 
-export function scalePart(res: number, auto: boolean): SentencePart {
-  return { label: `${hexAreaLabel(res)} hexagons`, qual: `(res ${res}${auto ? ", auto" : ""})` };
+export function scalePart(res: number): SentencePart {
+  return { label: `${hexAreaLabel(res)} hexagons`, qual: "" };
+}
+
+/** the resolution detail the sentence leaves out, for the footer: "res 3 (auto)" / "res 3 (fixed)" */
+export function resNote(res: number, auto: boolean): string {
+  return `res ${res} (${auto ? "auto" : "fixed"})`;
 }
 
 export function indicatorPart(ind: Indicator): SentencePart {
@@ -77,18 +80,16 @@ export function sentenceParts(o: {
   sel: LayerSel;
   aphia?: { name: string; rank: string } | null;
   decade: number | null;
-  snapshot?: string | null;
   inView: boolean;
   parts?: { loaded: number; total: number } | null;
   res: number;
-  auto: boolean;
   indicator: Indicator;
 }): SentenceParts {
   return {
     taxon: taxonPart(o.sel, o.aphia),
-    period: periodPart(o.decade, o.snapshot),
+    period: periodPart(o.decade),
     place: placePart(o.inView, o.parts),
-    scale: scalePart(o.res, o.auto),
+    scale: scalePart(o.res),
     indicator: indicatorPart(o.indicator),
   };
 }

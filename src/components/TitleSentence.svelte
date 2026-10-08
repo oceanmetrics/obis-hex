@@ -1,7 +1,7 @@
 <script lang="ts">
   // the title sentence, dataset → place → method: each bold part is a Chip whose popover holds the
   // same control as the Controls tab (passed in as snippets, so both read and write one state).
-  //   Seabirds (EOV), all years (OBIS 2026-07-28), worldwide, ~12,400 km² hexagons (res 3): ES(50)
+  //   Seabirds (EOV), all years, worldwide, ~12,400 km² hexagons: ES(50)
   import { Chip, Sentence } from "@marinebon/ui";
   import type { Snippet } from "svelte";
   import type { SentenceParts } from "../lib/view/sentence";
@@ -34,13 +34,13 @@
     </Chip>{#if parts.taxon.qual}<span class="q">{parts.taxon.qual}</span>{/if},
     <Chip label={parts.period.label} facet="method" title="choose a period" width="20rem">
       {#snippet children(close)}{@render period(close)}{/snippet}
-    </Chip>{#if parts.period.qual}<span class="q">{parts.period.qual}</span>{/if},
+    </Chip>,
     <Chip label={parts.place.label} facet="place" title="choose a place" width="20rem">
       {#snippet children(close)}{@render place(close)}{/snippet}
     </Chip>{#if parts.place.qual}<span class="q">{parts.place.qual}</span>{/if},
     <Chip label={parts.scale.label} facet="method" title="choose the hexagon size" width="20rem">
       {#snippet children(close)}{@render scale(close)}{/snippet}
-    </Chip>{#if parts.scale.qual}<span class="q">{parts.scale.qual}</span>{/if}:
+    </Chip>:
     <Chip label={parts.indicator.label} facet="method" title="choose an indicator" width="22rem">
       {#snippet children(close)}{@render indicator(close)}{/snippet}
     </Chip>

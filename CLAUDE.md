@@ -71,5 +71,6 @@ The engine takes an injectable `createDb`: the browser path lazy-imports `bundle
   and feedback report show.
 - Feedback sends to the shared Ocean Metrics Apps Script when `VITE_FEEDBACK_URL` is set (runbook:
   erddap-places `docs/feedback.md`); the email is optional, Sheet and mail only, never the issue.
-  Without an endpoint, or after a failed send, the GitHub issue, Copy report and Download PNG remain.
+  Send is the one button; without an endpoint it is disabled, and (or after a failed send) a notice
+  line links to the prefilled GitHub issue.
 - Vite `base` is `/obis-hex/`; local URLs and `OBIS_HEX_URL` need that path.

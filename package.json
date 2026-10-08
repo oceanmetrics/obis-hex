@@ -1,7 +1,7 @@
 {
   "name": "obis-hex",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "OBIS biodiversity indicators on H3 hexagons, computed from Parquet in the browser",
   "license": "MIT",
   "type": "module",

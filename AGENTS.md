@@ -36,15 +36,18 @@ Conventions for anyone (human or agent) changing obis-hex.
   Chip showing the same component; its state goes in `AppState`. A widget two apps need belongs in
   the kit, not here.
 - **The title sentence is the view's caption.** `sentenceParts()`/`sentenceText()`
-  (`src/lib/view/sentence.ts`) build it; the PNG stamp and `npm run figures` read it. Keep the ES(50)
+  (`src/lib/view/sentence.ts`) build it; the PNG stamp and `npm run figures` read it. The sentence carries no OBIS snapshot and no resolution: those are the footer's
+  (`footerReleaseText()` in `src/lib/export/cite.ts`, `resNote()`). Keep the ES(50)
   coverage line ("n of N hexagons have ≥ 50 records") visible whenever the indicator is ES(50).
 - **Help, the tour and feedback stay in step with the layout.** A control that moves or is renamed
   updates its tour stop (`TOUR_STOPS` in `src/lib/help/tour.ts`: order, selectors, words) and the
   Keyboard list (`SHORTCUTS`). `?tour=`/`?modal=` are query switches, never AppState. Screenshots and
   figures open with `?tour=off`. Feedback sends to the shared Ocean Metrics Apps Script when
   `VITE_FEEDBACK_URL` (or the `obis-hex.feedback_url` localStorage override) is set (runbook:
-  erddap-places `docs/feedback.md`); otherwise, or when the POST fails, it falls back to the GitHub
-  issue URL (`issueUrl()`, kept under 7,500 characters), the clipboard and a PNG. The email is
+  erddap-places `docs/feedback.md`); Send is the dialog's one primary button (`sendUi()` in `feedback/sendState.ts`): disabled
+  without an endpoint, and then, or when the POST fails, one notice line links to the GitHub issue
+  URL (`issueUrl()`, kept under 7,500 characters; the screenshot goes to the clipboard). There is no
+  Copy report or Download PNG. The email is
   optional: Sheet and mail only, never the issue, the issue URL or the clipboard report
   (`payload.ts` leaves the key out when empty; `FeedbackReport` has no email field). The view link is
   an opt-out checkbox; unticked, `url` is absent from the payload. Mark colours live only in
@@ -68,7 +71,7 @@ Conventions for anyone (human or agent) changing obis-hex.
 | `src/lib/view/regions.ts` | the "go to" regions; those with a `place_id` (and `bbox`) are outlined from the gazetteer |
 | `src/lib/export/` | the title-stamped PNG, the Cite this data text (release citation + OBIS line) |
 | `src/lib/help/` | tour stops and keys (`tour.ts`), `?tour=`/`?modal=` and the welcome views (`start.ts`), shortcuts (`keys.ts`), data sources (`sources.ts`) |
-| `src/lib/feedback/` | the GitHub issue URL and report text (`issue.ts`), mark-up drawing (`annotate.ts`) and colours (`colors.ts`), the endpoint (`endpoint.ts`), POST body (`payload.ts`) and client (`postFeedback.ts`), the lazy screenshot (`capture.ts`) |
+| `src/lib/feedback/` | the GitHub issue URL and report text (`issue.ts`), mark-up drawing (`annotate.ts`) and colours (`colors.ts`), the endpoint (`endpoint.ts`), what Send and the notice do (`sendState.ts`), POST body (`payload.ts`) and client (`postFeedback.ts`), the lazy screenshot (`capture.ts`) |
 | `src/components/Welcome, Tour, Modal, FeedbackDialog` | the welcome card, the tour ring and card, the native-dialog modal, the feedback dialog (lazy) |
 | `scripts/shoot.mjs` | the UI assessment capture → `docs/ui-assessment/after/` |
 | `src/lib/state/url.ts` | AppState, hash codec, defaults |

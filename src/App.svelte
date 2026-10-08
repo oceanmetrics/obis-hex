@@ -78,7 +78,7 @@
   import SharePanel from "./components/SharePanel.svelte";
   import DecadeBars from "./components/DecadeBars.svelte";
   import { taxonItems, type TaxonGroupRow } from "./lib/data/taxa";
-  import { coverageText, hexAreaLabel, sentenceParts, sentenceText } from "./lib/view/sentence";
+  import { coverageText, hexAreaLabel, resNote, sentenceParts, sentenceText } from "./lib/view/sentence";
   import {
     decadeAt,
     decadeCountsSql,
@@ -90,7 +90,7 @@
   } from "./lib/release/decades";
   import type { Region } from "./lib/view/regions";
   import { downloadCanvas, pngName, stampPng } from "./lib/export/png";
-  import { citeText, citeYear, dataDateText } from "./lib/export/cite";
+  import { citeText, citeYear, dataDateText, footerReleaseText } from "./lib/export/cite";
   import { RES_DECADE_MAX } from "./lib/state/resolution";
   import { VIRIDIS } from "./lib/color/ramp";
 
@@ -418,15 +418,15 @@
           ? { name: (aphiaAccepted && aphiaAccepted.id !== aphiaInfo.id ? aphiaAccepted : aphiaInfo).scientificName, rank: aphiaInfo.rank }
           : null,
       decade: st.decade,
-      snapshot: release?.obis_snapshot ?? null,
       inView,
       parts: !live && plan?.split ? { loaded: plan.files.length, total: plan.parentsTotal } : null,
       res,
-      auto: st.resMode === "auto",
       indicator: st.indicator,
     }),
   );
   const titleText = $derived(sentenceText(parts));
+  // the resolution detail the sentence leaves out: the footer, the PNG stamp
+  const resText = $derived(resNote(res, st.resMode === "auto"));
   const coverage = $derived(
     partition && vstats && !loading ? coverageText(st.indicator, vstats, Number(release?.esn ?? 50)) : "",
   );
@@ -572,7 +572,7 @@
       sub: coverage,
       indicator: parts.indicator.label,
       domain,
-      footer: `OBIS ${release?.obis_snapshot ?? ""} · release ${release?.release ?? ""} · obis-hex v${__APP_VERSION__} · ${location.href}`,
+      footer: `OBIS ${release?.obis_snapshot ?? ""} · release ${release?.release ?? ""} · ${resText} · obis-hex v${__APP_VERSION__} · ${location.href}`,
       dark: st.theme === "dark",
     });
     await downloadCanvas(c, pngName(st.layer, st.decade, res, st.indicator));
@@ -651,7 +651,7 @@
     snapshot: release?.obis_snapshot ?? null,
     viewport: `${innerWidth}×${innerHeight}`,
     theme: st.theme,
-    sentence: titleText,
+    sentence: `${titleText} (${resText})`,
   });
   function onKey(e: KeyboardEvent) {
     const t = e.target as HTMLElement | null;
@@ -984,12 +984,11 @@
   <Tour bind:index={tourIndex} onstep={tourStepped} onclose={tourClosed} />
 
   {#if FeedbackDialog}
-    <FeedbackDialog bind:open={fbOpen} kind={fbKind} image={fbImage} report={feedbackReport}
-      filename={`obis-hex_${fbKind}.png`} />
+    <FeedbackDialog bind:open={fbOpen} kind={fbKind} image={fbImage} report={feedbackReport} />
   {/if}
 
   <Footer sourceHref="https://github.com/oceanmetrics/obis-hex">
-    {#snippet release()}{#if releaseInfo}OBIS {releaseInfo.obis_snapshot ?? ""}{dataDate ? ` · data ${dataDate}` : ""} · release {releaseInfo.release} · v{__APP_VERSION__}{:else}v{__APP_VERSION__}{/if}{/snippet}
+    {#snippet release()}{footerReleaseText({ snapshot: releaseInfo?.obis_snapshot, dataDate, release: releaseInfo?.release, res: resText, version: __APP_VERSION__ })}{/snippet}
     {#snippet timing()}{#if partition}{fmtBytes(viewBytes)} · {Math.round(partition.ms)} ms{:else}…{/if}{/snippet}
   </Footer>
 </div>

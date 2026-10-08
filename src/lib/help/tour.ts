@@ -77,7 +77,7 @@ export const TOUR_STOPS: TourStop[] = [
     id: "help",
     target: [".mbon-header .mbon-menu .trigger"],
     title: "Help",
-    text: "The guide, this tour, the data sources and the keyboard shortcuts are here. The speech bubble beside it sends us feedback.",
+    text: "The guide, this tour, the data sources and the keyboard shortcuts are here. The speech bubble beside it sends us feedback (Send, or a GitHub issue if sending is not set up).",
   },
 ];
 

@@ -19,6 +19,25 @@ export function dataDateText(release: { built_at?: unknown } | null | undefined)
   return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
 }
 
+/** the footer's release detail, which the title sentence no longer carries:
+ * "OBIS 2026-07-28 · data 2026-10-07 · release v20260728 · res 1 (auto) · v0.6.1" (the OBIS, data and
+ * release parts are left out until release.json has loaded) */
+export function footerReleaseText(o: {
+  snapshot?: string | null;
+  dataDate?: string | null;
+  release?: string | null;
+  res: string;
+  version: string;
+}): string {
+  return [
+    ...(o.release ? [`OBIS ${o.snapshot ?? ""}`.trim()] : []),
+    ...(o.release && o.dataDate ? [`data ${o.dataDate}`] : []),
+    ...(o.release ? [`release ${o.release}`] : []),
+    o.res,
+    `v${o.version}`,
+  ].join(" · ");
+}
+
 /** the year a citation carries: the OBIS snapshot's, else the given fallback */
 export function citeYear(snapshot: string | null | undefined, fallback = "2026"): string {
   const y = (snapshot ?? "").slice(0, 4);

@@ -175,9 +175,6 @@ describe("feedback issue", () => {
     expect(body).toContain("- Theme: dark");
     expect(issueUrl(long, 3000).length).toBeLessThanOrEqual(3000);
   });
-  it("the copied report has no paste line", () => {
-    expect(reportBody(r, { paste: false })).not.toContain("paste it here");
-  });
 });
 
 describe("mark-up geometry", () => {

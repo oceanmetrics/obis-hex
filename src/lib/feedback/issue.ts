@@ -1,5 +1,5 @@
-// the fallback when no endpoint is configured or the POST fails: the prefilled GitHub "new issue" URL
-// and the same report as plain text for the clipboard (after MarineSensitivity/atlas
+// the fallback link when no endpoint is configured or the POST fails: the prefilled GitHub "new issue"
+// URL (after MarineSensitivity/atlas
 // src/lib/feedback/issueUrl.ts). The optional email never enters it (payload.ts sends it to the Sheet
 // and the mail only); the image never goes into the URL (GitHub cannot take one there): the dialog
 // copies it to the clipboard and asks the visitor to paste it into the issue.
@@ -48,10 +48,10 @@ function details(r: FeedbackReport): string {
 const NOTE_HEAD: Record<FeedbackKind, string> = { feedback: "**Note**", product: "**What I built** (a link helps)" };
 const PASTE = "_Screenshot: paste it here (it is on your clipboard)._";
 
-/** the issue body / clipboard text: the note, the screenshot line, the view's details */
-export function reportBody(r: FeedbackReport, opts: { note?: string; paste?: boolean } = {}): string {
+/** the issue body: the note, the screenshot line, the view's details */
+export function reportBody(r: FeedbackReport, opts: { note?: string } = {}): string {
   const note = (opts.note ?? r.note).trim();
-  return [NOTE_HEAD[r.kind], "", note || "_(no note)_", "", ...(opts.paste === false ? [] : [PASTE, ""]), "---", details(r)].join("\n");
+  return [NOTE_HEAD[r.kind], "", note || "_(no note)_", "", PASTE, "", "---", details(r)].join("\n");
 }
 
 function buildUrl(r: FeedbackReport, note: string): string {

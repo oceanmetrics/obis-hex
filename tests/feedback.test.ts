@@ -6,6 +6,9 @@ import { feedbackEndpoint, FEEDBACK_URL_KEY } from '../src/lib/feedback/endpoint
 import { postFeedback } from '../src/lib/feedback/postFeedback'
 import { drawMark } from '../src/lib/feedback/annotate'
 import { DEFAULT_MARK_COLOR, MARK_COLORS } from '../src/lib/feedback/colors'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { sendUi } from '../src/lib/feedback/sendState'
 import { issueUrl, reportBody, type FeedbackReport } from '../src/lib/feedback/issue'
 
 const INPUT: FeedbackPayloadInput = {
@@ -159,12 +162,12 @@ describe('drawMark colour', () => {
   })
 })
 
-describe('the email never reaches the GitHub issue or the clipboard report', () => {
+describe('the email never reaches the GitHub issue', () => {
   const r: FeedbackReport = {
     kind: 'feedback', note: 'Looks wrong.', url: 'https://oceanmetrics.io/obis-hex/#l=all', appVersion: '0.6.0',
     release: 'v20260728', snapshot: '2026-07-28', viewport: '1280×800', theme: 'dark',
   }
-  it('FeedbackReport has no email field, so the issue URL and the report text cannot carry one', () => {
+  it('FeedbackReport has no email field, so the issue URL and body cannot carry one', () => {
     expect('email' in r).toBe(false)
     expect(decodeURIComponent(issueUrl(r))).not.toContain('@')
     expect(reportBody(r)).not.toContain('@')
@@ -172,5 +175,35 @@ describe('the email never reaches the GitHub issue or the clipboard report', () 
   it('an unticked "include a link" box (empty url) leaves the View line out', () => {
     expect(reportBody({ ...r, url: '' })).not.toContain('- View:')
     expect(reportBody(r)).toContain('- View: https://oceanmetrics.io/obis-hex/#l=all')
+  })
+})
+
+describe('one Send button, the GitHub issue as the fallback link (0.6.1)', () => {
+  const ok = { endpoint: 'https://script.google.com/x/exec', note: 'Looks wrong.', emailOk: true, phase: 'idle' as const }
+  it('without an endpoint Send is disabled and the notice carries the issue link', () => {
+    const u = sendUi({ ...ok, endpoint: null })
+    expect(u.disabled).toBe(true)
+    expect(u.notice).toEqual({ before: 'Sending is not set up yet; ', link: 'open a GitHub issue', after: ' instead.' })
+  })
+  it('with an endpoint and a note Send is enabled and there is no notice', () => {
+    expect(sendUi(ok)).toEqual({ disabled: false, notice: null })
+  })
+  it('Send waits for a note and a valid email, and is off while sending and after sent', () => {
+    expect(sendUi({ ...ok, note: '  ' }).disabled).toBe(true)
+    expect(sendUi({ ...ok, emailOk: false }).disabled).toBe(true)
+    expect(sendUi({ ...ok, phase: 'sending' }).disabled).toBe(true)
+    expect(sendUi({ ...ok, phase: 'sent' }).disabled).toBe(true)
+  })
+  it('after a failed POST the notice with the issue link appears and Send can be retried', () => {
+    const u = sendUi({ ...ok, phase: 'failed' })
+    expect(u.disabled).toBe(false)
+    expect(u.notice?.link).toBe('open a GitHub issue')
+  })
+  it('the dialog has no Copy report or Download PNG, and wires the notice link to the issue', () => {
+    const src = readFileSync(resolve(__dirname, '../src/components/FeedbackDialog.svelte'), 'utf8')
+    expect(src).not.toMatch(/Copy report|Download PNG|copyReport|download\(/)
+    expect(src).toContain('ui.notice.link')
+    expect(src).toContain('onclick={openIssue}')
+    expect(src).toMatch(/<Button variant="primary"[^>]*onclick=\{send\}/)
   })
 })

@@ -18,8 +18,8 @@ the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-a
   feedback"), the feedback bubble and the theme toggle. The theme is the kit's (stored as
   `mbon-theme`) and drives the CARTO basemap (dark-matter / positron); a link's `t=` still wins.
 - **The title sentence is the controls**, in the order dataset → place → method:
-  "**Seabirds** (EOV), **all years** (OBIS 2026-07-28), **worldwide**, **~12,400 km² hexagons** (res 3):
-  **ES(50)**". Each bold part is a chip whose popover holds the same control as its Controls tab.
+  "**Seabirds** (EOV), **all years**, **worldwide**, **~12,400 km² hexagons**: **ES(50)**". The OBIS
+  snapshot and the resolution (`res 3 (auto)` or `(fixed)`) are in the footer, not the sentence. Each bold part is a chip whose popover holds the same control as its Controls tab.
   The second line is the colour scale (viridis over p02–p98, the release's for the view or the loaded
   hexagons') and the count, which for ES(50) is the coverage caveat: "9,196 of 26,361 hexagons have
   ≥ 50 records". *Worldwide* means the whole layer is loaded (one file); *in view* means only the
@@ -42,7 +42,7 @@ the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-a
   at any res for a WoRMS taxon; taxon groups say so instead.
 - **Cell** (right edge): a pill that lights when a hexagon is clicked; open it for all five indicators.
   Hovering a hexagon shows them too.
-- **Footer** (kit): built by Ocean Metrics · OBIS snapshot · data build date · release · version · bytes · ms · source.
+- **Footer** (kit): built by Ocean Metrics · OBIS snapshot · data build date · release · resolution · version · bytes · ms · source.
 - **Phone**: the panes become bottom sheets (Controls folded at first), the footer wraps.
 - The URL hash holds the whole view, so any link reproduces it (see "URL" below). Old links to the
   Shiny app open the same view here once Caddy redirects them (see "Legacy URLs").
@@ -106,21 +106,24 @@ Modelled on calcofi.io/explore ("Help, the tour and feedback"). Logic in `src/li
   rectangle, arrow and text mark-up in one of three colours (pink by default, yellow, blue:
   `colors.ts`, the one place a canvas colour is written), and a checkbox "include a link to this
   view" (on by default; unticked, the `url` key is absent from the payload).
-  - **Send** (shown when an endpoint is configured: `VITE_FEEDBACK_URL`, set as the repo variable of
-    that name and passed to the build in `pages.yml`, or the localStorage key `obis-hex.feedback_url`
-    for a test without a rebuild; `endpoint.ts`): `postFeedback.ts` POSTs `payload.ts`'s body
-    (`app: "obis-hex"`, kind, text, email only when given, url only when ticked, the release id and
-    OBIS snapshot, version, viewport, theme, user agent, the sentence, the image, a honeypot) as
-    `text/plain` to the shared Ocean Metrics Apps Script (runbook: erddap-places `docs/feedback.md`),
-    which writes a Google Sheet row, mails the recipients and opens a GitHub issue labelled with the
-    kind. The email goes to the Sheet and the mail only, never into the issue. States: Sending, Sent,
-    or failed (the message says so and *Open a GitHub issue* appears).
-  - **Fallbacks**, always available: *Open a GitHub issue* (shown when there is no endpoint or after a
-    failed send) opens `github.com/oceanmetrics/obis-hex/issues/new` prefilled (title, note, view URL
-    if ticked, sentence, release, app version, viewport, theme; label `feedback`) and copies the image
-    to the clipboard to paste in; *Copy report* puts the same text and the image on the clipboard;
-    *Download PNG*. The body is cut to keep the URL under 7,500 characters (the note is trimmed, never
-    the details). The email is never in these.
+  - **Send** is the one button, always shown. It is enabled when an endpoint is configured
+    (`VITE_FEEDBACK_URL`, set as the repo variable of that name and passed to the build in `pages.yml`,
+    or the localStorage key `obis-hex.feedback_url` for a test without a rebuild; `endpoint.ts`), there
+    is a note and the email, if given, looks like one (`sendUi()` in `sendState.ts`). `postFeedback.ts`
+    POSTs `payload.ts`'s body (`app: "obis-hex"`, kind, text, email only when given, url only when
+    ticked, the release id and OBIS snapshot, version, viewport, theme, user agent, the sentence and the
+    resolution, the image, a honeypot) as `text/plain` to the shared Ocean Metrics Apps Script (runbook:
+    erddap-places `docs/feedback.md`), which writes a Google Sheet row, mails the recipients and opens a
+    GitHub issue labelled with the kind. The email goes to the Sheet and the mail only, never into the
+    issue. States: Sending, Sent, or failed.
+  - **The GitHub issue is a link, not a button.** One notice line under Send reads "Sending is not set
+    up yet; *open a GitHub issue* instead." (no endpoint) or "It could not be sent; *open a GitHub issue*
+    instead." (after a failed send). The link opens `github.com/oceanmetrics/obis-hex/issues/new`
+    prefilled (title, note, view URL if ticked, sentence, release, app version, viewport, theme; label
+    `feedback`) and copies the screenshot to the clipboard to paste in. The body is cut to keep the URL
+    under 7,500 characters (the note is trimmed, never the details). The email is never in it. There is
+    no Copy report or Download PNG in the dialog (the screenshot is in the payload; the Share tab still
+    downloads the map PNG).
   *Register a product* is the same dialog titled "I built something with this" (label `product`). The
   dialog and `html-to-image` load only on click. Tests: `tests/feedback.test.ts`.
 
@@ -354,11 +357,11 @@ Measured at 0.3.0 (2026-10-08):
 
 | | gzip | budget |
 |---|---|---|
-| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) → 647.7 KB (0.6.0) | 650 KB |
+| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) → 647.7 KB (0.6.0) → 647.7 KB (0.6.1) | 650 KB |
 | runtime worker (MapLibre's) | 140.2 KB | 150 KB |
 | fonts and images (the kit's nine woff2 faces and the MBON wordmark; 0.4.0) | 538.1 KB raw | 600 KB |
 | DuckDB-WASM (lazy: JS chunk 45 KB, wasm ~7.8 MB) | not counted | must stay lazy |
-| feedback dialog (with the 0.6.0 endpoint, payload and colour code) + html-to-image (lazy, 0.5.0) | 5.3 KB + 5.3 KB, not counted | must stay lazy |
+| feedback dialog (with the 0.6.0 endpoint, payload and colour code) + html-to-image (lazy, 0.5.0) | 4.9 KB (5.3 KB at 0.6.0, before Copy report and Download PNG went) + 5.3 KB, not counted | must stay lazy |
 
 The atlas budget is 450 KB; deck.gl and h3-js add roughly 300 KB, hence 650 KB here. The viewport
 code (`polygonToCells`, `gridDisk`) uses the h3-js already in the bundle for deck.gl, so 0.2.0 (viewport loading,
@@ -373,6 +376,14 @@ forbidden marker in the static graph, like DuckDB's bundle names.
 
 ## Versions
 
+- **0.6.1**: the title sentence loses its two qualifiers: "(OBIS 2026-07-28)" after the years and
+  "(res N, auto)" after the hexagons; it reads "All taxa, all years, worldwide, ~610,000 km² hexagons:
+  ES(50)". The footer carries both (`OBIS 2026-07-28 · data 2026-10-07 · release v20260728 · res 1
+  (auto) · v0.6.1`; `res N (fixed)` when the resolution is pinned), and so do the PNG stamp and the
+  feedback report. The feedback dialog has one primary button, Send, always shown (disabled without an
+  endpoint); *Open a GitHub issue* becomes an inline link in a notice under it, shown when sending is not
+  set up or has failed; *Copy report* and *Download PNG* are gone. Entry unchanged at 647.7 KB gzip of
+  650 KB; the lazy dialog chunk shrinks from 5.3 to 4.9 KB.
 - **0.6.0**: `@marinebon/ui` 0.3.0 (the title sentence is the kit's size, 22 px, 28 px large, so
   the app's own override is gone; chips render at 0.9em; the selected Controls tab is semibold with
   an accent ring). Feedback goes to the shared Ocean Metrics endpoint when `VITE_FEEDBACK_URL` is set:

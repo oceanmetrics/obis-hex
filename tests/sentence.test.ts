@@ -3,6 +3,7 @@ import {
   coverageText,
   hexAreaLabel,
   placePart,
+  resNote,
   scalePart,
   sentenceParts,
   sentenceText,
@@ -15,14 +16,12 @@ describe("title sentence", () => {
     const p = sentenceParts({
       sel: { kind: "eov", eov: "seabirds" },
       decade: null,
-      snapshot: "2026-07-28",
       inView: false,
       res: 3,
-      auto: false,
       indicator: "es",
     });
     expect(sentenceText(p)).toBe(
-      "Seabirds (EOV), all years (OBIS 2026-07-28), worldwide, ~12,400 km² hexagons (res 3): ES(50)",
+      "Seabirds (EOV), all years, worldwide, ~12,400 km² hexagons: ES(50)",
     );
     expect(p.taxon).toEqual({ label: "Seabirds", qual: "(EOV)" });
   });
@@ -31,21 +30,30 @@ describe("title sentence", () => {
     const p = sentenceParts({
       sel: { kind: "taxon", rank: "class", taxon: "Aves" },
       decade: null,
-      snapshot: "2026-07-28",
       inView: true,
       parts: { loaded: 1, total: 122 },
       res: 7,
-      auto: true,
       indicator: "es",
     });
     expect(sentenceText(p)).toBe(
-      "Birds (class Aves), all years (OBIS 2026-07-28), in view (1 of 122 partitions), ~5 km² hexagons (res 7, auto): ES(50)",
+      "Birds (class Aves), all years, in view (1 of 122 partitions), ~5 km² hexagons: ES(50)",
     );
   });
 
   it("a decade, all taxa, another indicator", () => {
-    const p = sentenceParts({ sel: { kind: "all" }, decade: 1990, inView: false, res: 1, auto: true, indicator: "sp" });
-    expect(sentenceText(p)).toBe("All taxa, 1990s, worldwide, ~610,000 km² hexagons (res 1, auto): Richness");
+    const p = sentenceParts({ sel: { kind: "all" }, decade: 1990, inView: false, res: 1, indicator: "sp" });
+    expect(sentenceText(p)).toBe("All taxa, 1990s, worldwide, ~610,000 km² hexagons: Richness");
+  });
+
+  it("the sentence carries neither the OBIS snapshot nor the resolution (0.6.1: both are in the footer)", () => {
+    const p = sentenceParts({ sel: { kind: "all" }, decade: null, inView: false, res: 3, indicator: "es" });
+    expect(sentenceText(p)).not.toMatch(/OBIS|res \d|auto|fixed/);
+    expect(p.period.qual).toBe("");
+    expect(p.scale.qual).toBe("");
+  });
+  it("resNote: the resolution detail for the footer", () => {
+    expect(resNote(1, true)).toBe("res 1 (auto)");
+    expect(resNote(5, false)).toBe("res 5 (fixed)");
   });
 
   it("taxon chip: scientific name when no common name; live WoRMS layer", () => {
@@ -68,7 +76,7 @@ describe("title sentence", () => {
       "~36 km²",
       "~5 km²",
     ]);
-    expect(scalePart(3, true)).toEqual({ label: "~12,400 km² hexagons", qual: "(res 3, auto)" });
+    expect(scalePart(3)).toEqual({ label: "~12,400 km² hexagons", qual: "" });
   });
 
   it("place: worldwide vs in view", () => {
