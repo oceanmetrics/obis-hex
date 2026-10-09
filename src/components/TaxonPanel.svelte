@@ -17,6 +17,7 @@
     aphiaInfo,
     aphiaAccepted,
     maxHeight = "16rem",
+    fill = false,
     onpicked,
   }: {
     st: AppState;
@@ -26,6 +27,8 @@
     aphiaInfo: TaxonInfo | null;
     aphiaAccepted: TaxonInfo | null;
     maxHeight?: string;
+    /** in the fill Controls the list takes the pane's height (the kit's Picker `fill`) */
+    fill?: boolean;
     /** called after a layer is chosen (the Chip closes its popover) */
     onpicked?: () => void;
   } = $props();
@@ -68,8 +71,8 @@
   }
 </script>
 
-<div class="taxon-panel" bind:this={host}>
-  <Picker {items} bind:value label="taxa" placeholder="Search taxa, EOVs, common names…" {maxHeight} onselect={pick}>
+<div class="taxon-panel" class:mbon-fill={fill} bind:this={host}>
+  <Picker {items} bind:value label="taxa" placeholder="Search taxa, EOVs, common names…" {maxHeight} {fill} onselect={pick}>
     {#snippet row(it)}
       <span class="lab">{it.label}</span>
       {#if it.count != null}

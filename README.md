@@ -11,7 +11,7 @@ builds each cell from its H3 index.
 
 ## What it shows
 
-An MBON product built on the [`@marinebon/ui`](https://github.com/marinebon/ui) kit (v0.3.0): the map is
+An MBON product built on the [`@marinebon/ui`](https://github.com/marinebon/ui) kit (v0.4.0): the map is
 the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-assessment.md`).
 
 - **Header**: the MBON wordmark, *OBIS hex* and its tagline, **Help ▾** (see "Help, the tour and
@@ -417,6 +417,8 @@ budget. 0.5.2 (the place outline) added 9.2 KB, almost all of it `pmtiles` and i
 forbidden marker in the static graph, like DuckDB's bundle names.
 
 ## Versions
+
+- **0.8.1** (2026-10-09): `@marinebon/ui` 0.4.0. The full-height Controls, the Time strip beside them, and the taxon list that fills the pane now come from the kit (`Controls fill`, `Picker fill`, `.mbon-fill`), which erddap-places uses as well. The app's own `stripLeft()` (`src/lib/view/layout.ts`), its pane measuring and its CSS overrides are gone. The layout is unchanged: checked at 1400×850, 1100×650 and phone width, and with the Controls folded, shortened and expanded. Entry 649.8 KB gzip of 660 KB.
 
 - **0.8.0** (2026-10-09): the Controls have three tabs: ① **Metric** (sub-tabs *Taxon* and *Indicator*: the taxon and the indicator are one dataset step), ② **Place** (was *Place & scale*), ③ **Share**; keys 1–3. `k=` keeps its values (`k=indicator` opens the Indicator sub-tab; Metric reopens on the sub-tab last shown). The title chips take their tab's colour: the indicator is dataset purple, the period and hexagon size place navy. The Controls run the stage's full height and the Time strip starts to their right (`stripLeft()`, `src/lib/view/layout.ts`; it spans the stage again when the Controls are folded, shortened above it or dragged right), and the taxon list fills the pane at any height: it kept 16rem in a taller or expanded pane ([#2](https://github.com/oceanmetrics/obis-hex/issues/2)).
 

@@ -32,21 +32,9 @@ body { background: var(--bg-page); }
 /* tab widths follow their labels */
 .stage .mbon-controls [role="tab"] { flex: 1 1 auto; padding-inline: 0.3em; }
 
-/* the Controls run the stage's full height (#2; a height the visitor drags is the Pane's inline style
-   and wins), and the Time strip starts to their right (--strip-left, `stripLeft()` in view/layout.ts) */
-.stage .mbon-pane:has(.mbon-controls):not(.sheet):not(.expanded) { height: calc(100% - 24px); }
-.stage .mbon-timestrip.overlay:not(.expanded) { left: var(--strip-left, 12px); } /* :not() outranks the kit's scoped rule */
-/* the content fills the pane, so the taxon list grows with it (it kept 16rem in a taller pane): the tabs
-   stay put and the tab panel scrolls; on a phone sheet the list keeps its 16rem */
-.stage .mbon-pane:not(.sheet) .mbon-controls { height: 100%; }
-.stage .mbon-pane:not(.sheet) .mbon-controls > [role="tabpanel"] {
-  flex: 1; min-height: 0; overflow: hidden auto; display: flex; flex-direction: column;
-  padding-inline: var(--space-1); margin-inline: calc(-1 * var(--space-1)); /* room for the list rows' negative margin */
-}
-.stage .mbon-pane:not(.sheet) .metric { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: var(--space-3); }
-.stage .mbon-pane:not(.sheet) .metric-panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.stage .mbon-pane:not(.sheet) .metric-panel :is(.taxon-panel, .mbon-picker) { flex: 1; min-height: 0; }
-.stage .mbon-pane:not(.sheet) .metric-panel .list { flex: 1; min-height: 8rem; max-height: none !important; }
+/* the Controls run the stage's full height with the Time strip beside them, and the taxon list fills
+   the pane (#2): the kit's `Controls fill` / `Picker fill` / `.mbon-fill` (@marinebon/ui 0.4.0) */
+.metric { display: flex; flex-direction: column; gap: var(--space-3); }
 
 .notices { position: absolute; z-index: 20; top: 12px; left: 50%; transform: translateX(-50%); width: min(560px, calc(100% - 24px)); display: flex; flex-direction: column; gap: var(--space-2); }
 

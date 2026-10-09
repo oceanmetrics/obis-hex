@@ -79,7 +79,6 @@
   import DecadeBars from "./components/DecadeBars.svelte";
   import { taxonItems, type TaxonGroupRow } from "./lib/data/taxa";
   import { coverageText, hexAreaLabel, resNote, sentenceParts, sentenceText } from "./lib/view/sentence";
-  import { PANE_GAP, relBox, stripLeft } from "./lib/view/layout";
   import {
     decadeAt,
     decadeCountsSql,
@@ -164,8 +163,6 @@
   let decadeCounts = $state.raw<{ key: string; decades: DecadeCount[]; total: number | null; ms: number } | null>(null);
   const decadeCache = new Map<string, { key: string; decades: DecadeCount[]; total: number | null; ms: number }>();
   let brush = $state<[number, number] | null>(null);
-  let stageEl = $state<HTMLElement>();
-  let stripLeftPx = $state(PANE_GAP);
   let stripH = $state(76);
   // the live AphiaID layer (h3t subtree service) ----
   let h3tHealth = $state<"probing" | "ok" | "down">("probing");
@@ -420,39 +417,6 @@
   );
   $effect(() => {
     handle?.setPlace(placeTarget);
-  });
-  // the Time strip starts right of the Controls while they reach down beside it (#2): measured from
-  // the panes themselves, on every resize, drag (the Pane's inline style) and fold ----
-  $effect(() => {
-    const stage = stageEl;
-    void st.ctlFolded;
-    if (!stage || !wideEnough) {
-      stripLeftPx = PANE_GAP;
-      return;
-    }
-    const measure = () => {
-      const s = stage.getBoundingClientRect();
-      const pane = stage.querySelector<HTMLElement>(".mbon-pane:has(.mbon-controls)");
-      const strip = stage.querySelector<HTMLElement>(".mbon-timestrip");
-      const p = pane && pane.offsetParent ? relBox(pane.getBoundingClientRect(), s) : null;
-      const top = strip ? relBox(strip.getBoundingClientRect(), s).top : s.height;
-      stripLeftPx = stripLeft(s.width, p, top);
-    };
-    const ro = new ResizeObserver(measure);
-    const mo = new MutationObserver(measure);
-    const raf = requestAnimationFrame(() => {
-      measure();
-      ro.observe(stage);
-      for (const el of stage.querySelectorAll(".mbon-pane:has(.mbon-controls), .mbon-timestrip")) {
-        ro.observe(el);
-        mo.observe(el, { attributes: true, attributeFilter: ["style", "class"] });
-      }
-    });
-    return () => {
-      cancelAnimationFrame(raf);
-      ro.disconnect();
-      mo.disconnect();
-    };
   });
   // keep the map's centre above the Time strip (laptop and wider; on a phone the panes are sheets)
   $effect(() => {
@@ -913,7 +877,7 @@
     </TitleSentence>
   </section>
 
-  <main class="stage" data-cell={selected ? "1" : "0"} bind:this={stageEl} style:--strip-left="{stripLeftPx}px">
+  <main class="stage" data-cell={selected ? "1" : "0"}>
     <div class="map" bind:this={mapEl}></div>
 
     <div class="map-tools">
@@ -935,19 +899,19 @@
       </div>
     {/if}
 
-    <Controls id="controls" title="controls" {tabs} width={400}
+    <Controls id="controls" title="controls" {tabs} width={400} fill
       bind:active={() => controlTab(st.tab), (v) => (st.tab = tabFor(((CONTROL_TABS as readonly string[]).includes(v ?? "") ? v : "metric") as ControlTab, lastMetric))}
       bind:collapsed={st.ctlFolded}>
       {#snippet panel(id)}
         {#if id === "metric"}
-          <div class="metric">
+          <div class="metric mbon-fill">
             <SubTabs tabs={METRIC_SUBTABS} idPrefix="metric" panelId="metric-panel" label="metric"
               bind:active={() => (isMetricTab(st.tab) ? st.tab : lastMetric), (v) => (st.tab = isMetricTab(v) ? v : "taxon")} />
-            <div class="metric-panel" id="metric-panel" role="tabpanel" aria-labelledby="metric-tab-{isMetricTab(st.tab) ? st.tab : lastMetric}">
+            <div class="metric-panel mbon-fill" id="metric-panel" role="tabpanel" aria-labelledby="metric-tab-{isMetricTab(st.tab) ? st.tab : lastMetric}">
               {#if st.tab === "indicator"}
                 <IndicatorPanel bind:st {live} />
               {:else}
-                <TaxonPanel bind:st {items} {h3tBase} {h3tHealth} {aphiaInfo} {aphiaAccepted} />
+                <TaxonPanel bind:st {items} {h3tBase} {h3tHealth} {aphiaInfo} {aphiaAccepted} fill />
               {/if}
             </div>
           </div>

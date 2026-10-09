@@ -35,11 +35,12 @@ Conventions for anyone (human or agent) changing obis-hex.
   `pl=` carries `pc=` when it is ambiguous. Read PMTiles from the bucket host (`pmtilesUrl()`), never
   `storage.oceanmetrics.io` (302 without CORS). `places/index.ts` and `PlacePanel.svelte` are a lazy chunk:
   the always-loaded code (`App.svelte`, `map.ts`) reaches them by `import()` or `places/urls.ts` only.
-- **The UI is `@marinebon/ui`** (pinned `github:marinebon/ui#v0.3.0`; read its AGENTS.md before adding a
+- **The UI is `@marinebon/ui`** (pinned `github:marinebon/ui#v0.4.0`; read its AGENTS.md before adding a
   control). Use its components and semantic tokens (`--bg-surface`, `--text-body`, …), never a new hex
   value; the pipeline order is ① Metric (the dataset step: taxon and indicator, sub-tabs, since neither means anything
   without the other) → ② Place (where, hexagon size, period, projection) → ③ Share (delivery); a title chip
-  takes the colour of the tab that holds its control. A
+  takes the colour of the tab that holds its control. The gaps between the panes are the kit's: `Controls fill`
+  (full height, the Time strip beside it), `Picker fill` and `.mbon-fill`; never size a pane in app CSS. A
   control that changes what the map means goes in its Controls tab AND in the title sentence as a
   Chip showing the same component; its state goes in `AppState`. A widget two apps need belongs in
   the kit, not here.
