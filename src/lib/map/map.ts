@@ -258,12 +258,16 @@ function createStackedMap(main: MapLibreMap, className: string) {
   // a direct child: an overlay made earlier has a control container of its own inside it
   const ctrl = main.getContainer().querySelector(":scope > .maplibregl-control-container");
   main.getContainer().insertBefore(el, ctrl);
-  // deck's canvas lives in MapLibre's top-left control corner (z-index 2), so the stacked maps (3) are
-  // above it, and the other corners (buttons, attribution) are lifted above them (4)
+  // deck's canvas lives in MapLibre's top-left control corner, which loses its z-index (2) so it forms no
+  // stacking context: the canvas paints in tree order, under the stacked maps (3), while deck's tooltip
+  // (in a widget container, `.fill`) is lifted above them and the buttons (5); the other corners
+  // (buttons, attribution) are lifted above the maps (4)
   if (!document.getElementById("place-outline-css")) {
     const st = document.createElement("style");
     st.id = "place-outline-css";
     st.textContent =
+      ".maplibregl-ctrl-top-left{z-index:auto!important}" +
+      ".deck-widget-container>div>.fill{z-index:5!important}" +
       ".maplibregl-ctrl-top-right,.maplibregl-ctrl-bottom-right,.maplibregl-ctrl-bottom-left{z-index:4!important}";
     document.head.append(st);
   }

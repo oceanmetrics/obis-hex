@@ -14,6 +14,7 @@
   } from "./lib/data/layers";
   import { fileUrl } from "./lib/release/manifest";
   import { planView, type Bounds } from "./lib/view/viewport";
+  import { mapPadding, type PaneSpan } from "./lib/view/padding";
   import {
     loadMeta,
     probeRelease,
@@ -170,6 +171,9 @@
   let aphiaInfo = $state.raw<TaxonInfo | null>(null);
   let aphiaAccepted = $state.raw<TaxonInfo | null>(null);
   let mapEl: HTMLDivElement;
+  // the Controls pane's horizontal extent over the map (null when folded, a sheet or expanded) ----
+  let mapW = $state(0);
+  let ctlSpan = $state.raw<PaneSpan | null>(null);
   let handle = $state.raw<MapHandle | null>(null);
 
   // derived view ----
@@ -418,10 +422,30 @@
   $effect(() => {
     handle?.setPlace(placeTarget);
   });
-  // keep the map's centre above the Time strip (laptop and wider; on a phone the panes are sheets)
+  // keep the map's centre (and the globe) in the part of the map the panes leave open: above the Time
+  // strip and beside the Controls (laptop and wider; on a phone the panes are sheets) ----
+  function measurePanes() {
+    if (!mapEl) return;
+    const m = mapEl.getBoundingClientRect();
+    mapW = m.width;
+    const pane = mapEl.parentElement?.querySelector(".mbon-controls")?.closest(".mbon-pane");
+    if (!pane || pane.classList.contains("sheet") || pane.classList.contains("expanded")) {
+      if (ctlSpan) ctlSpan = null;
+      return;
+    }
+    const r = pane.getBoundingClientRect();
+    const span = { left: Math.round(r.left - m.left), right: Math.round(r.right - m.left) };
+    if (span.left !== ctlSpan?.left || span.right !== ctlSpan?.right) ctlSpan = span;
+  }
   $effect(() => {
+    const map = handle?.map;
+    if (!map) return;
     const bottom = wideEnough ? (st.timeFolded ? 56 : stripH + 64) : 0;
-    handle?.map.setPadding({ top: 0, left: 0, right: 0, bottom });
+    const pad = mapPadding(mapW, wideEnough ? ctlSpan : null, bottom);
+    const now = map.getPadding();
+    if (now.top === pad.top && now.right === pad.right && now.bottom === pad.bottom && now.left === pad.left) return;
+    // the centre stays put; only where it is drawn moves
+    map.easeTo({ padding: pad, duration: 250 });
   });
 
 
@@ -778,6 +802,24 @@
       },
     });
     bounds = handle.bounds();
+    // re-measure the Controls when the map resizes, a pane folds, unfolds or turns into a sheet, and
+    // when a drag, resize or arrow-key move ends (not on every move, so the globe does not chase the pane)
+    let measureQueued = false;
+    const queueMeasure = () => {
+      if (measureQueued) return;
+      measureQueued = true;
+      requestAnimationFrame(() => {
+        measureQueued = false;
+        measurePanes();
+      });
+    };
+    const ro = new ResizeObserver(queueMeasure);
+    ro.observe(mapEl);
+    const mo = new MutationObserver(queueMeasure);
+    mo.observe(mapEl.parentElement!, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+    window.addEventListener("pointerup", queueMeasure);
+    window.addEventListener("keyup", queueMeasure);
+    queueMeasure();
     window.addEventListener("hashchange", onHashChange);
     window.addEventListener("keydown", onKey);
     if (atLoad.tour) startTour();
@@ -813,6 +855,10 @@
     })();
 
     return () => {
+      ro.disconnect();
+      mo.disconnect();
+      window.removeEventListener("pointerup", queueMeasure);
+      window.removeEventListener("keyup", queueMeasure);
       window.removeEventListener("hashchange", onHashChange);
       window.removeEventListener("keydown", onKey);
       offTheme();

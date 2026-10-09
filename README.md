@@ -318,6 +318,8 @@ it gets its centroid and a zoom from its latitude span. A single point (a statio
   projection in the style, so a theme swap keeps both); the main map loads the basemap without them
   (`splitStyle(style, "base")` through `setStyle`'s `transformStyle`). Both overlays share
   `createStackedMap()` for the camera follow. The PNG export draws map, deck, labels, outline.
+  Deck's hover tooltip is lifted above both (0.8.2): the top-left control corner holding deck has
+  `z-index: auto`, and deck's widget container `.fill` is at 5.
 - **Attribution**: the main map's attribution control carries OBIS, the basemap and, for the selected place,
   `Places: <attribution_html of its collection>` (`creditsFor()`; links open in a new tab, a link already
   credited elsewhere stays plain text). MapLibre has no setter for a custom attribution, so the control is
@@ -417,6 +419,8 @@ budget. 0.5.2 (the place outline) added 9.2 KB, almost all of it `pmtiles` and i
 forbidden marker in the static graph, like DuckDB's bundle names.
 
 ## Versions
+
+- **0.8.2** (2026-10-09): the hover tooltip draws above the basemap labels. Since 0.7.5 the labels' stacked map (z-index 3) sat above MapLibre's top-left control corner (z-index 2), which holds deck's canvas and its tooltip, so place names showed through the tooltip. The corner now has `z-index: auto` (no stacking context of its own) and deck's tooltip container is lifted to 5; the canvas stays under the labels. The map's centre (and the globe) now sits in the middle of the part of the map the panes leave open: the camera padding (`mapPadding()`, `src/lib/view/padding.ts`) adds the Controls pane's width on its side to the Time strip's height, so with the Controls open the globe no longer hides its left side behind them and leaves a gap on the right; folding them eases it back to the middle. The `c=` centre is unchanged, so links open on the same place. A pane dragged into the right half pads the right instead; an expanded pane, or one that would leave the map less than 40% of the stage, pads no side. The paper figures, which show the Controls, were re-run.
 
 - **0.8.1** (2026-10-09): `@marinebon/ui` 0.4.0. The full-height Controls, the Time strip beside them, and the taxon list that fills the pane now come from the kit (`Controls fill`, `Picker fill`, `.mbon-fill`), which erddap-places uses as well. The app's own `stripLeft()` (`src/lib/view/layout.ts`), its pane measuring and its CSS overrides are gone. The layout is unchanged: checked at 1400×850, 1100×650 and phone width, and with the Controls folded, shortened and expanded. Entry 649.8 KB gzip of 660 KB.
 
