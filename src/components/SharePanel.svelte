@@ -1,5 +1,5 @@
 <script lang="ts">
-  // ④ Share: everything that leaves the app. Copy link, the PNG with the title stamped (the one
+  // ③ Share: everything that leaves the app. Copy link, the PNG with the title stamped (the one
   // coral call to action), Cite, and "SQL & timing": the query, the cost and the full stats that
   // used to sit over the map and in the footer.
   import { Button } from "@marinebon/ui";

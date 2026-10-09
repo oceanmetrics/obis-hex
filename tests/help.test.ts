@@ -10,9 +10,17 @@ import { arrowHead, rectBox, toImage } from "../src/lib/feedback/annotate";
 import { DEFAULT_STATE, formatHash, parseHash } from "../src/lib/state/url";
 
 describe("tour", () => {
-  it("stops in the page's order: sentence, ① ② ③, legend, Time, Cell, ④, Help", () => {
-    expect(TOUR_STOPS.map((s) => s.id)).toEqual(["sentence", "taxon", "place", "indicator", "legend", "time", "cell", "share", "help"]);
-    expect(TOUR_STOPS.filter((s) => s.tab).map((s) => s.tab)).toEqual(["taxon", "place", "indicator", "share"]);
+  it("stops in the page's order: sentence, ① Metric (taxon, indicator), legend, ② Place, Time, Cell, ③ Share, Help", () => {
+    expect(TOUR_STOPS.map((s) => s.id)).toEqual(["sentence", "taxon", "indicator", "legend", "place", "time", "cell", "share", "help"]);
+    expect(TOUR_STOPS.filter((s) => s.tab).map((s) => s.tab)).toEqual(["taxon", "indicator", "place", "share"]);
+    expect(TOUR_STOPS.filter((s) => s.tab).map((s) => s.title)).toEqual(["① Metric: taxon", "① Metric: indicator", "② Place", "③ Share"]);
+  });
+  it("the Metric sub-tabs keep the tab ids the tour rings (`-tab-taxon`, `-tab-indicator`)", () => {
+    const app = readFileSync(join(__dirname, "../src/App.svelte"), "utf8");
+    const sub = readFileSync(join(__dirname, "../src/components/SubTabs.svelte"), "utf8");
+    expect(app).toMatch(/<SubTabs tabs=\{METRIC_SUBTABS\} idPrefix="metric"/);
+    expect(sub).toContain('id="{idPrefix}-tab-{t.id}"');
+    for (const id of ["taxon", "indicator"]) expect(TOUR_STOPS.find((s) => s.id === id)!.target.join(" ")).toContain(`-tab-${id}`);
   });
   it("each stop is one or two sentences and has a target", () => {
     for (const s of TOUR_STOPS) {
@@ -106,9 +114,10 @@ describe("shortcuts", () => {
     expect(shortcutFor({ key: "?" })).toEqual({ kind: "tour" });
     expect(shortcutFor({ key: "t" })).toEqual({ kind: "theme" });
     expect(shortcutFor({ key: "g" })).toEqual({ kind: "projection" });
-    expect(shortcutFor({ key: "1" })).toEqual({ kind: "tab", tab: "taxon" });
-    expect(shortcutFor({ key: "4" })).toEqual({ kind: "tab", tab: "share" });
-    expect(shortcutFor({ key: "5" })).toBeNull();
+    expect(shortcutFor({ key: "1" })).toEqual({ kind: "tab", tab: "metric" });
+    expect(shortcutFor({ key: "2" })).toEqual({ kind: "tab", tab: "place" });
+    expect(shortcutFor({ key: "3" })).toEqual({ kind: "tab", tab: "share" });
+    expect(shortcutFor({ key: "4" })).toBeNull();
     expect(shortcutFor({ key: "+" })).toEqual({ kind: "zoom", by: 1 });
     expect(shortcutFor({ key: "-" })).toEqual({ kind: "zoom", by: -1 });
     expect(shortcutFor({ key: "Escape" })).toEqual({ kind: "escape" });

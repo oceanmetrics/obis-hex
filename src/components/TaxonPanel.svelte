@@ -1,5 +1,5 @@
 <script lang="ts">
-  // ① Taxon: one Picker of every layer (All taxa, the EOVs, taxon groups by rank) with record
+  // ① Metric, Taxon sub-tab: one Picker of every layer (All taxa, the EOVs, taxon groups by rank) with record
   // counts on a log bar, and the live WoRMS search. Shown in the Controls tab and the taxon Chip.
   import { Picker } from "@marinebon/ui";
   import { parseLayerKey, layerKey, type LayerSel } from "../lib/data/layers";

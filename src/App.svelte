@@ -24,7 +24,7 @@
     type ReleaseMeta,
     type StatsRow,
   } from "./lib/release/release";
-  import { formatHash, hashHas, parseHash, TABS, type AppState, type Tab } from "./lib/state/url";
+  import { CONTROL_TABS, controlTab, formatHash, hashHas, isMetricTab, parseHash, tabFor, type AppState, type ControlTab, type MetricTab, type Tab } from "./lib/state/url";
   import { legacyQuery, legacyToState } from "./lib/state/legacy";
   import { effectiveRes, zoomToRes } from "./lib/state/resolution";
   import { chooseDomain, domainFromStats, viewStats } from "./lib/color/ramp";
@@ -74,10 +74,12 @@
   import PeriodPicker from "./components/PeriodPicker.svelte";
   import ScalePanel from "./components/ScalePanel.svelte";
   import IndicatorPanel from "./components/IndicatorPanel.svelte";
+  import SubTabs from "./components/SubTabs.svelte";
   import SharePanel from "./components/SharePanel.svelte";
   import DecadeBars from "./components/DecadeBars.svelte";
   import { taxonItems, type TaxonGroupRow } from "./lib/data/taxa";
   import { coverageText, hexAreaLabel, resNote, sentenceParts, sentenceText } from "./lib/view/sentence";
+  import { PANE_GAP, relBox, stripLeft } from "./lib/view/layout";
   import {
     decadeAt,
     decadeCountsSql,
@@ -162,7 +164,8 @@
   let decadeCounts = $state.raw<{ key: string; decades: DecadeCount[]; total: number | null; ms: number } | null>(null);
   const decadeCache = new Map<string, { key: string; decades: DecadeCount[]; total: number | null; ms: number }>();
   let brush = $state<[number, number] | null>(null);
-  let stageH = $state(600);
+  let stageEl = $state<HTMLElement>();
+  let stripLeftPx = $state(PANE_GAP);
   let stripH = $state(76);
   // the live AphiaID layer (h3t subtree service) ----
   let h3tHealth = $state<"probing" | "ok" | "down">("probing");
@@ -418,6 +421,39 @@
   $effect(() => {
     handle?.setPlace(placeTarget);
   });
+  // the Time strip starts right of the Controls while they reach down beside it (#2): measured from
+  // the panes themselves, on every resize, drag (the Pane's inline style) and fold ----
+  $effect(() => {
+    const stage = stageEl;
+    void st.ctlFolded;
+    if (!stage || !wideEnough) {
+      stripLeftPx = PANE_GAP;
+      return;
+    }
+    const measure = () => {
+      const s = stage.getBoundingClientRect();
+      const pane = stage.querySelector<HTMLElement>(".mbon-pane:has(.mbon-controls)");
+      const strip = stage.querySelector<HTMLElement>(".mbon-timestrip");
+      const p = pane && pane.offsetParent ? relBox(pane.getBoundingClientRect(), s) : null;
+      const top = strip ? relBox(strip.getBoundingClientRect(), s).top : s.height;
+      stripLeftPx = stripLeft(s.width, p, top);
+    };
+    const ro = new ResizeObserver(measure);
+    const mo = new MutationObserver(measure);
+    const raf = requestAnimationFrame(() => {
+      measure();
+      ro.observe(stage);
+      for (const el of stage.querySelectorAll(".mbon-pane:has(.mbon-controls), .mbon-timestrip")) {
+        ro.observe(el);
+        mo.observe(el, { attributes: true, attributeFilter: ["style", "class"] });
+      }
+    });
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+      mo.disconnect();
+    };
+  });
   // keep the map's centre above the Time strip (laptop and wider; on a phone the panes are sheets)
   $effect(() => {
     const bottom = wideEnough ? (st.timeFolded ? 56 : stripH + 64) : 0;
@@ -638,7 +674,13 @@
   );
   const permalink = $derived(`${location.origin}${location.pathname}${formatHash(st)}`);
   const gradient = VIRIDIS.map((c) => `rgb(${c.join(",")})`);
-  const tabs = TABS.map((id) => ({ id, label: { taxon: "Taxon", place: "Place & scale", indicator: "Indicator", share: "Share" }[id] }));
+  const tabs = CONTROL_TABS.map((id) => ({ id, label: { metric: "Metric", place: "Place", share: "Share" }[id] }));
+  const METRIC_SUBTABS = [{ id: "taxon", label: "Taxon" }, { id: "indicator", label: "Indicator" }];
+  // ① Metric reopens on the sub-tab last shown
+  let lastMetric = $state<MetricTab>("taxon");
+  $effect(() => {
+    if (isMetricTab(st.tab)) lastMetric = st.tab;
+  });
 
   // help, the tour and feedback ----
   function showModal(m: HelpModal) {
@@ -721,7 +763,7 @@
     else if (s.kind === "projection") st.proj = st.proj === "globe" ? "flat" : "globe";
     else if (s.kind === "tab") {
       st.ctlFolded = false;
-      st.tab = s.tab;
+      st.tab = tabFor(s.tab, lastMetric);
     } else if (s.kind === "zoom") {
       if (s.by > 0) handle?.map.zoomIn();
       else handle?.map.zoomOut();
@@ -871,8 +913,7 @@
     </TitleSentence>
   </section>
 
-  <main class="stage" data-cell={selected ? "1" : "0"} bind:clientHeight={stageH}
-    style:--ctl-max="{Math.max(160, stageH - 24 - (st.timeFolded ? 56 : stripH + 64))}px">
+  <main class="stage" data-cell={selected ? "1" : "0"} bind:this={stageEl} style:--strip-left="{stripLeftPx}px">
     <div class="map" bind:this={mapEl}></div>
 
     <div class="map-tools">
@@ -895,11 +936,21 @@
     {/if}
 
     <Controls id="controls" title="controls" {tabs} width={400}
-      bind:active={() => st.tab, (v) => (st.tab = ((TABS as readonly string[]).includes(v ?? "") ? v : "taxon") as Tab)}
+      bind:active={() => controlTab(st.tab), (v) => (st.tab = tabFor(((CONTROL_TABS as readonly string[]).includes(v ?? "") ? v : "metric") as ControlTab, lastMetric))}
       bind:collapsed={st.ctlFolded}>
       {#snippet panel(id)}
-        {#if id === "taxon"}
-          <TaxonPanel bind:st {items} {h3tBase} {h3tHealth} {aphiaInfo} {aphiaAccepted} />
+        {#if id === "metric"}
+          <div class="metric">
+            <SubTabs tabs={METRIC_SUBTABS} idPrefix="metric" panelId="metric-panel" label="metric"
+              bind:active={() => (isMetricTab(st.tab) ? st.tab : lastMetric), (v) => (st.tab = isMetricTab(v) ? v : "taxon")} />
+            <div class="metric-panel" id="metric-panel" role="tabpanel" aria-labelledby="metric-tab-{isMetricTab(st.tab) ? st.tab : lastMetric}">
+              {#if st.tab === "indicator"}
+                <IndicatorPanel bind:st {live} />
+              {:else}
+                <TaxonPanel bind:st {items} {h3tBase} {h3tHealth} {aphiaInfo} {aphiaAccepted} />
+              {/if}
+            </div>
+          </div>
         {:else if id === "place"}
           <div class="tab">
             <PlaceGate panel={PlacePanelC} note={placeNote()} placeId={st.place} placeColl={st.placeColl} data={placeData} error={placeError} onneed={needPlaces}
@@ -920,8 +971,6 @@
               </div>
             </div>
           </div>
-        {:else if id === "indicator"}
-          <IndicatorPanel bind:st {live} />
         {:else}
           <SharePanel {permalink} {cite} onpng={savePng} sql={sqlText} statsQuery={live ? "" : statsQuery} isUrl={live}>
             {#snippet timing()}

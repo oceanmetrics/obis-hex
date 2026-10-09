@@ -1,4 +1,4 @@
-// "go to" seas and oceans for the Place & scale tab: a camera per region (centre and zoom), chosen so
+// "go to" seas and oceans for the Place tab: a camera per region (centre and zoom), chosen so
 // the region fills a laptop-sized map. They move the map only; what loads is still decided by the
 // viewport (planView), so a region never changes the bytes rule. A sea or ocean has no gazetteer
 // feature, so choosing one clears the outlined place. Gazetteer places (sanctuaries, leases, lines,

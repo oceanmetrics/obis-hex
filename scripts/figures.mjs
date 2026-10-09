@@ -28,7 +28,7 @@ export const FIGURES = [
   },
   {
     file: "figA_app_seagrasses_caribbean.png",
-    what: "seagrasses EOV, ES(50), res 4, the Caribbean (the hexagon size control open in ② Place & scale)",
+    what: "seagrasses EOV, ES(50), res 4, the Caribbean (the hexagon size control open in ② Place)",
     hash: "#i=es&l=eov:seagrasses&p=all&r=4&o=0.85&t=light&d=release&g=flat&c=-80.5,19.5,4.3&k=place",
   },
 ];

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // ③ Indicator: which column of the loaded hexagons to colour by (switching never refetches);
+  // ① Metric, Indicator sub-tab: which column of the loaded hexagons to colour by (switching never refetches);
   // under More options the colour ramp domain, the fill opacity and the basemap labels.
   import { Button, Slider, Toggle } from "@marinebon/ui";
   import { INDICATORS, INDICATOR_HELP } from "../lib/data/layers";

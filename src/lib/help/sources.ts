@@ -57,8 +57,8 @@ export function sources(o: {
       name: "Ocean Metrics gazetteer",
       href: "https://storage.oceanmetrics.io/gazetteer/",
       role: o.place
-        ? `The places of the Place & scale picker (14,000+ in 22 collections); the outlined one is from the collection "${o.place.title}".`
-        : "The places of the Place & scale picker (14,000+ in 22 collections: sanctuaries, monuments, leases, planning areas, maritime limits, CalCOFI lines, undersea features), outlined on the map from per-collection PMTiles.",
+        ? `The places of the Place picker (14,000+ in 22 collections); the outlined one is from the collection "${o.place.title}".`
+        : "The places of the Place picker (14,000+ in 22 collections: sanctuaries, monuments, leases, planning areas, maritime limits, CalCOFI lines, undersea features), outlined on the map from per-collection PMTiles.",
       ...(o.place
         ? { citation: o.place.citation, licence: o.place.license_url ? `${o.place.license} (${o.place.license_url})` : o.place.license }
         : {}),

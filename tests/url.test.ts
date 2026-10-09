@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_STATE, formatHash, hashHas, parseHash, type AppState } from "../src/lib/state/url";
+import { controlTab, CONTROL_TABS, DEFAULT_STATE, formatHash, hashHas, parseHash, tabFor, TABS, type AppState } from "../src/lib/state/url";
 import { layerKey, layerLabel, manifestLayer, parseLayerKey } from "../src/lib/data/layers";
 
 describe("URL hash state", () => {
@@ -193,5 +193,22 @@ describe("layout keys (0.4.0 MBON re-layout)", () => {
     expect(hashHas("#i=es&t=light", "t")).toBe(true);
     expect(hashHas("#i=es&tc=1", "t")).toBe(false);
     expect(hashHas("", "t")).toBe(false);
+  });
+});
+
+describe("Controls tabs (0.8.0): ① Metric (taxon | indicator), ② Place, ③ Share", () => {
+  it("taxon and indicator are the Metric tab's sub-tabs; place and share are tabs of their own", () => {
+    expect(CONTROL_TABS).toEqual(["metric", "place", "share"]);
+    expect(TABS.map(controlTab)).toEqual(["metric", "metric", "place", "share"]);
+  });
+  it("Metric reopens on its last sub-tab; the others open themselves", () => {
+    expect(tabFor("metric", "taxon")).toBe("taxon");
+    expect(tabFor("metric", "indicator")).toBe("indicator");
+    expect(tabFor("place", "indicator")).toBe("place");
+    expect(tabFor("share", "taxon")).toBe("share");
+  });
+  it("old k= links still open the same view", () => {
+    for (const k of ["indicator", "place", "share"]) expect(parseHash(`#k=${k}`).tab).toBe(k);
+    expect(parseHash("#k=metric").tab).toBe("taxon"); // not a view: the default
   });
 });

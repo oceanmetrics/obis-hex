@@ -7,7 +7,8 @@
 // when it is not the default, the globe (0.5.1); a link without `g` opens the globe, a link with
 // `g=flat` still opens the flat map. The layout keys added in 0.4.0 are written only when they
 // differ from their default (see LAYOUT_KEYS):
-//   k=place|indicator|share   Controls tab (default taxon)
+//   k=indicator|place|share   Controls tab (default taxon): taxon and indicator are the two sub-tabs of
+//                             ① Metric (0.8.0), place and share are ② Place and ③ Share
 //   cc=1                      Controls pane folded to its pill
 //   tc=1                      Time strip folded
 //   x=<h3>                    the selected cell (lights the Cell pill)
@@ -22,9 +23,24 @@ import { RES_MAX } from "./resolution";
 
 export const DECADES = [1960, 1970, 1980, 1990, 2000, 2010, 2020] as const;
 
-/** the Controls tabs, in pipeline order: dataset (taxon) → place → method (indicator) → delivery */
-export const TABS = ["taxon", "place", "indicator", "share"] as const;
+/** every view of the Controls (`k=`): the two Metric sub-tabs, then Place and Share */
+export const TABS = ["taxon", "indicator", "place", "share"] as const;
 export type Tab = (typeof TABS)[number];
+
+/** the Controls tabs, in pipeline order (0.8.0): ① Metric, the dataset step (taxon and indicator,
+ * which only mean something together, as an ERDDAP dataset and its variable) → ② Place (where, the
+ * hexagon size, the period, the projection) → ③ Share (delivery) */
+export const CONTROL_TABS = ["metric", "place", "share"] as const;
+export type ControlTab = (typeof CONTROL_TABS)[number];
+/** the sub-tabs of ① Metric */
+export const METRIC_TABS = ["taxon", "indicator"] as const;
+export type MetricTab = (typeof METRIC_TABS)[number];
+
+export const isMetricTab = (t: string): t is MetricTab => (METRIC_TABS as readonly string[]).includes(t);
+/** the Controls tab that shows a view */
+export const controlTab = (t: Tab): ControlTab => (isMetricTab(t) ? "metric" : t);
+/** the view a Controls tab opens: Metric opens its last sub-tab (`last`), the others themselves */
+export const tabFor = (c: ControlTab, last: MetricTab): Tab => (c === "metric" ? last : c);
 
 /** the hash keys of the layout state, written only when not at their default */
 export const LAYOUT_KEYS = ["k", "cc", "tc", "x", "xo", "b", "pl", "pc"] as const;

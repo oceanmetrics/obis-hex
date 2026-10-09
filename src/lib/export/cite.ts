@@ -1,4 +1,4 @@
-// "Cite this data" (④ Share and the About modal): the release citation (this map, the H3 release,
+// "Cite this data" (③ Share and the About modal): the release citation (this map, the H3 release,
 // the OBIS snapshot it was computed from, the obisindicators version, the app version and the view's
 // link), then OBIS's own citation line as the OBIS manual asks (manual.obis.org/citing.html).
 export interface CiteInput {

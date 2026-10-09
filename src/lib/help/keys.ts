@@ -1,13 +1,13 @@
 // the page's keyboard shortcuts (Help ▾ → Keyboard lists the same map). A shortcut never fires while
 // the visitor types (input, textarea, select, contenteditable) or holds Ctrl/Alt/Meta, and only Esc
 // works while a modal or the tour is open (they handle their own keys).
-import { TABS, type Tab } from "../state/url";
+import { CONTROL_TABS, type ControlTab } from "../state/url";
 
 export type Shortcut =
   | { kind: "tour" }
   | { kind: "theme" }
   | { kind: "projection" }
-  | { kind: "tab"; tab: Tab }
+  | { kind: "tab"; tab: ControlTab }
   | { kind: "zoom"; by: 1 | -1 }
   | { kind: "escape" };
 
@@ -15,7 +15,7 @@ export const SHORTCUTS: { keys: string[]; what: string }[] = [
   { keys: ["?"], what: "take the tour" },
   { keys: ["t"], what: "light or dark theme" },
   { keys: ["g"], what: "globe or flat map" },
-  { keys: ["1", "2", "3", "4"], what: "Controls tabs: ① Taxon, ② Place & scale, ③ Indicator, ④ Share" },
+  { keys: ["1", "2", "3"], what: "Controls tabs: ① Metric (taxon, indicator), ② Place, ③ Share" },
   { keys: ["+", "−"], what: "zoom in, out" },
   { keys: ["Esc"], what: "close the open menu, dialog or tour" },
 ];
@@ -53,6 +53,6 @@ export function shortcutFor(e: KeyLike, opts: { busy?: boolean } = {}): Shortcut
       return { kind: "zoom", by: -1 };
   }
   const n = Number(e.key);
-  if (Number.isInteger(n) && n >= 1 && n <= TABS.length) return { kind: "tab", tab: TABS[n - 1] };
+  if (Number.isInteger(n) && n >= 1 && n <= CONTROL_TABS.length) return { kind: "tab", tab: CONTROL_TABS[n - 1] };
   return null;
 }

@@ -24,16 +24,18 @@ the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-a
   hexagons') and the count, which for ES(50) is the coverage caveat: "9,196 of 26,361 hexagons have
   ≥ 50 records". *Worldwide* means the whole layer is loaded (one file); *in view* means only the
   parent partitions covering the map (or the live layer's bbox), and the count is for those.
-- **Controls** (top left, numbered): ① **Taxon**: one picker of All taxa, the 7 Essential Ocean
+- **Controls** (the left, the stage's full height, numbered; the Time strip starts to their right):
+  ① **Metric**, the dataset step: a taxon and an indicator, which only mean something together (as an
+  ERDDAP dataset and its variable), on two sub-tabs. *Taxon*: one picker, filling the pane, of All taxa, the 7 Essential Ocean
   Variables (IOOS definitions, as in `obisindicators::obis_eov_seeds()`), the taxon groups by phylum,
   class and order (from `taxon_groups.parquet`, most records first, record counts on a log bar, common
   names for the groups people look for), and **Any taxon (WoRMS)**: the children of any WoRMS AphiaID,
   computed live by the h3t subtree service (see below; the one layer not in the static release).
-  ② **Place & scale**: go to a sea or ocean, or search any of the 14,734 places of the Ocean Metrics gazetteer (sanctuaries, leases, planning areas, lines, undersea features; the place is outlined and credited, see "Place outline"), hexagon size (auto from zoom, the Shiny app's
+  ② **Place**: go to a sea or ocean, or search any of the 14,734 places of the Ocean Metrics gazetteer (sanctuaries, leases, planning areas, lines, undersea features; the place is outlined and credited, see "Place outline"), hexagon size (auto from zoom, the Shiny app's
   mapping capped at 7, or 5 with a decade on a release layer; or pinned), the period, flat or globe.
-  ③ **Indicator**: ES(50), species richness, Shannon H′, Simpson Σp², records, each with a line of
+  ① Metric's *Indicator* sub-tab: ES(50), species richness, Shannon H′, Simpson Σp², records, each with a line of
   meaning; *More options*: ramp domain (whole release / loaded hexagons), fill opacity, basemap labels.
-  ④ **Share**: Download PNG (the title, scale, release and link stamped on it), Copy link, *Cite this
+  ③ **Share**: Download PNG (the title, scale, release and link stamped on it), Copy link, *Cite this
   data* (the release citation, then OBIS's own line), and *SQL & timing* (the partition path, bytes, cells, ms,
   partitions fetched/cached, the stats table and the copyable SQL or request URL).
 - **Time strip** (bottom): records per decade for the current layer (the sum of `n` over the res-1
@@ -89,8 +91,8 @@ Modelled on calcofi.io/explore ("Help, the tour and feedback"). Logic in `src/li
   layout are kept.
 - **Tour**: *Help ▾ → Take the tour*, the `?` key, or `?tour=on`. No library: a ring around one part
   of the page and a card with Skip / Back / Next (Done on the last). Nine stops in the page's order:
-  the sentence → ① Taxon → ② Place & scale → ③ Indicator → the legend and the coverage line → the Time
-  strip → the Cell pill → ④ Share → Help. Keys: ← → (PageUp/PageDown) move, Home/End jump, Esc ends;
+  the sentence → ① Metric: taxon → ① Metric: indicator → the legend and the coverage line → ② Place → the
+  Time strip → the Cell pill → ③ Share → Help. Keys: ← → (PageUp/PageDown) move, Home/End jump, Esc ends;
   focus sits on Next and returns where it was. A stop on a Controls tab opens that tab (and unfolds
   Controls); the tab and folds are restored when the tour ends. Animated only without
   `prefers-reduced-motion`. The stops' words are `TOUR_STOPS` in `src/lib/help/tour.ts`.
@@ -261,7 +263,7 @@ land they read as near-black, as in the Shiny app.
 
 ## Place outline
 
-The **Place & scale** picker lists the whole published [Ocean Metrics
+The **Place** picker lists the whole published [Ocean Metrics
 gazetteer](https://storage.oceanmetrics.io/gazetteer/): 14,734 places in 22 collections (NOAA sanctuaries
 and monuments, MPA inventory, BOEM leases and planning areas, CalCOFI lines and stations, maritime limits,
 cables, GEBCO undersea features ...), as one group per collection in the manifest's order, after a
@@ -348,7 +350,7 @@ on SwiftShader, 1512×798) and writes `figures/figA_*.png`:
 |---|---|
 | `figA_app_alltaxa_globe_dark.png` | all taxa, ES(50), res 1, dark basemap, globe |
 | `figA_app_seagrasses_globe.png` | seagrasses EOV, ES(50), res 1, light basemap, globe |
-| `figA_app_seagrasses_caribbean.png` | seagrasses EOV, ES(50), res 4, the Caribbean, ② Place & scale open (`k=place`) |
+| `figA_app_seagrasses_caribbean.png` | seagrasses EOV, ES(50), res 4, the Caribbean, ② Place open (`k=place`) |
 
 Since 0.4.0 each figure shows the MBON layout: the title sentence, the Controls pane, the Time strip
 and the footer; the script waits on `.shell[data-ready="1"]` (which now also waits for the ramp's
@@ -415,6 +417,8 @@ budget. 0.5.2 (the place outline) added 9.2 KB, almost all of it `pmtiles` and i
 forbidden marker in the static graph, like DuckDB's bundle names.
 
 ## Versions
+
+- **0.8.0** (2026-10-09): the Controls have three tabs: ① **Metric** (sub-tabs *Taxon* and *Indicator*: the taxon and the indicator are one dataset step), ② **Place** (was *Place & scale*), ③ **Share**; keys 1–3. `k=` keeps its values (`k=indicator` opens the Indicator sub-tab; Metric reopens on the sub-tab last shown). The title chips take their tab's colour: the indicator is dataset purple, the period and hexagon size place navy. The Controls run the stage's full height and the Time strip starts to their right (`stripLeft()`, `src/lib/view/layout.ts`; it spans the stage again when the Controls are folded, shortened above it or dragged right), and the taxon list fills the pane at any height: it kept 16rem in a taller or expanded pane ([#2](https://github.com/oceanmetrics/obis-hex/issues/2)).
 
 - **0.7.5** (2026-10-09): the basemap's labels draw above the hexagons, on a third, transparent MapLibre map stacked between deck and the place outline (`createLabelMap()`; the main map's style keeps every layer but the symbol layers, `splitStyle()`); `b=0` hides them as before and the PNG export includes them. The map opens over North America (`c=-103.7,33.2,2.57`, res 2) instead of the whole world, which stays the "Whole world" preset ([#1](https://github.com/oceanmetrics/obis-hex/issues/1)). The feedback dialog has no hidden honeypot input: Chrome autofill still filled the renamed `xq_note_check` trap (0.7.4) together with the email, and the script dropped a person's feedback as spam; the payload sends `website: ""`.
 

@@ -1,7 +1,7 @@
 // the in-app tour: a focus ring on one part of the page and a small card (Back / Next / Done). The
 // stops follow the page in the pipeline order of the docs (calcofi.io/explore's "Start the tour"):
-// the sentence, the four Controls tabs with the legend and the Time strip and the Cell pill between
-// method and delivery, then Help. No library: Tour.svelte draws the ring and the card, this file
+// the sentence, the Controls tabs (① Metric's two sub-tabs, then the legend, ② Place) with the Time
+// strip and the Cell pill before ③ Share, then Help. No library: Tour.svelte draws the ring and the card, this file
 // holds the stops and the keyboard rules, so both are tested.
 import type { Tab } from "../state/url";
 
@@ -30,28 +30,28 @@ export const TOUR_STOPS: TourStop[] = [
     id: "taxon",
     target: tabSel("taxon"),
     tab: "taxon",
-    title: "① Taxon",
-    text: "Choose what to count: all taxa, an Essential Ocean Variable such as seabirds, a phylum, class or order, or any taxon in WoRMS.",
-  },
-  {
-    id: "place",
-    target: tabSel("place"),
-    tab: "place",
-    title: "② Place & scale",
-    text: "Go to a sea, or search 14,000+ places from the Ocean Metrics gazetteer (sanctuaries, leases, planning areas, lines, undersea features): the place is outlined on the map and credited. Then set the hexagon size and the decade, or turn the flat map into a globe.",
+    title: "① Metric: taxon",
+    text: "The map is one metric: a taxon and an indicator. First choose what to count: all taxa, an Essential Ocean Variable such as seabirds, a phylum, class or order, or any taxon in WoRMS.",
   },
   {
     id: "indicator",
     target: tabSel("indicator"),
     tab: "indicator",
-    title: "③ Indicator",
-    text: "Choose how diversity is measured. ES(50) is the number of species expected in 50 records, so a well-sampled place does not look richer just because it has more records.",
+    title: "① Metric: indicator",
+    text: "Then choose how diversity is measured. ES(50) is the number of species expected in 50 records, so a well-sampled place does not look richer just because it has more records.",
   },
   {
     id: "legend",
     target: [".view-title .sub", ".title-band .legend", ".title-band"],
     title: "The colour scale and coverage",
     text: "Yellow is high, purple is low. For ES(50) the line beside it counts the hexagons with the 50 records it needs; the others stay empty.",
+  },
+  {
+    id: "place",
+    target: tabSel("place"),
+    tab: "place",
+    title: "② Place",
+    text: "Go to a sea, or search 14,000+ places from the Ocean Metrics gazetteer (sanctuaries, leases, planning areas, lines, undersea features): the place is outlined on the map and credited. Then set the hexagon size and the decade, or turn the flat map into a globe.",
   },
   {
     id: "time",
@@ -70,7 +70,7 @@ export const TOUR_STOPS: TourStop[] = [
     id: "share",
     target: tabSel("share"),
     tab: "share",
-    title: "④ Share",
+    title: "③ Share",
     text: "Every view is a link. Download the map as a PNG with its title, copy the link, or copy the citation.",
   },
   {
