@@ -5,10 +5,11 @@
 // (its own canvas, its own picking), as CalCOFI explore did before it went interleaved; nothing
 // here needs a deck layer under a basemap layer, so theme swaps are a plain setStyle().
 // (Interleaved deck 9.4 does not run on MapLibre 6: it reads `map.transform`, gone in 6, and throws
-// every frame. So the hexagons are always above the map's own layers, and the gazetteer outline is
-// drawn by a second, transparent MapLibre map stacked above deck; see `createOutlineMap`.)
+// every frame. So the hexagons are always above the map's own layers: the basemap's labels and the
+// gazetteer outline are drawn by transparent MapLibre maps stacked above deck; see `createLabelMap`
+// and `createOutlineMap`.)
 import { Map as MapLibreMap, setWorkerUrl, addProtocol, AttributionControl, NavigationControl } from "maplibre-gl";
-import type { FilterSpecification } from "maplibre-gl";
+import type { FilterSpecification, LayerSpecification, StyleSpecification } from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -23,6 +24,33 @@ export const BASEMAP_STYLE: Record<"dark" | "light", string> = {
 };
 
 let wired = false;
+
+/** a basemap layer is a label when it is a symbol layer (place names, road shields, POIs) */
+export const isLabelLayer = (l: Pick<LayerSpecification, "type">) => l.type === "symbol";
+
+/** the basemap style split in two: the main map draws everything but the labels (under deck's
+ * hexagons), the label map draws only the labels (above them) */
+export function splitStyle(style: StyleSpecification, part: "base" | "labels"): StyleSpecification {
+  return { ...style, layers: style.layers.filter((l) => isLabelLayer(l) === (part === "labels")) };
+}
+
+/** the label map's style: the basemap's labels, shown or hidden, in the given projection (both set
+ * in the style itself, so a theme swap that MapLibre applies as a diff keeps them) */
+export function labelStyle(style: StyleSpecification, on: boolean, projection: Projection): StyleSpecification {
+  const s = splitStyle(style, "labels");
+  return {
+    ...s,
+    projection: { type: projection === "globe" ? "globe" : "mercator" },
+    layers: s.layers.map((l) => ({ ...l, layout: { ...l.layout, visibility: on ? "visible" : "none" } }) as LayerSpecification),
+  };
+}
+
+/** the setStyle options that keep the basemap's non-label layers */
+const BASE_ONLY = {
+  transformStyle: (_prev: StyleSpecification | undefined, next: StyleSpecification) => splitStyle(next, "base"),
+};
+
+const emptyStyle = (): StyleSpecification => ({ version: 8, sources: {}, layers: [] });
 
 // the Ocean Metrics gazetteer: one PMTiles per collection (`<bucket>/gazetteer/<collection>/places.pmtiles`,
 // source layer == the collection's slug, feature property `place_id`), read by HTTP range requests.
@@ -109,15 +137,17 @@ export function createMap(
   let place: PlaceTarget | null = opts.place ?? null;
   let projection = opts.projection;
   let labels = opts.labels ?? true;
+  // the style goes in through setStyle, the only place MapLibre takes a transformStyle
   const map = new MapLibreMap({
     container,
-    style: BASEMAP_STYLE[theme],
+    style: emptyStyle(),
     center: opts.center,
     zoom: opts.zoom,
     attributionControl: false,
     canvasContextAttributes: { preserveDrawingBuffer: true },
     renderWorldCopies: true,
   });
+  map.setStyle(BASEMAP_STYLE[theme], BASE_ONLY);
   map.addControl(new NavigationControl({ showCompass: false }), "top-right");
   // MapLibre has no setter for a custom attribution, so the control is replaced when the credited
   // collection changes
@@ -145,14 +175,9 @@ export function createMap(
     map.setProjection({ type: projection === "globe" ? "globe" : "mercator" });
   };
   map.on("style.load", applyProjection);
-  const applyLabels = () => {
-    for (const l of map.getStyle()?.layers ?? [])
-      if (l.type === "symbol") map.setLayoutProperty(l.id, "visibility", labels ? "visible" : "none");
-  };
-  map.on("style.load", () => {
-    if (!labels) applyLabels();
-  });
 
+  // stacked above deck's canvas in this order: the labels, then the place outline
+  const labelMap = createLabelMap(map, { theme, projection, labels });
   const outline = createOutlineMap(map, { theme, projection, place });
 
   map.on("moveend", () => {
@@ -166,19 +191,21 @@ export function createMap(
     setTheme(t) {
       if (t === theme) return;
       theme = t;
-      map.setStyle(BASEMAP_STYLE[t]);
+      map.setStyle(BASEMAP_STYLE[t], BASE_ONLY);
+      labelMap.setTheme(t);
       outline.setTheme(t);
     },
     setProjection(p) {
       if (p === projection) return;
       projection = p;
       if (map.isStyleLoaded()) applyProjection();
+      labelMap.setProjection(p);
       outline.setProjection(p);
     },
     setLabels(on) {
       if (on === labels) return;
       labels = on;
-      if (map.isStyleLoaded()) applyLabels();
+      labelMap.setLabels(on);
     },
     setPlace(target) {
       if (target?.credit !== place?.credit) setCredit(target?.credit);
@@ -196,6 +223,8 @@ export function createMap(
       const deck = (overlay as unknown as { _deck?: { redraw(r?: string): void; canvas?: HTMLCanvasElement } })._deck;
       deck?.redraw("png");
       if (deck?.canvas) ctx.drawImage(deck.canvas, 0, 0, out.width, out.height);
+      const lc = labelMap.canvas();
+      if (labels && lc) ctx.drawImage(lc, 0, 0, out.width, out.height);
       const o = outline.canvas();
       if (place && o) ctx.drawImage(o, 0, 0, out.width, out.height);
       return out;
@@ -212,29 +241,25 @@ export function createMap(
     destroy() {
       ro?.disconnect();
       outline.destroy();
+      labelMap.destroy();
       map.remove();
     },
   };
 }
 
-/** A second MapLibre map with no basemap, stacked above the main map and deck's canvas
- * (pointer-events: none), that draws only the selected place's outline from the gazetteer PMTiles.
- * deck draws on its own canvas above every MapLibre layer, so an outline on the main map would sit
- * under the (85% opaque) hexagons; this one sits above them. It follows the main map's camera
- * (centre, zoom, bearing, pitch, padding) on every move, uses the same projection, and its style never
- * changes, so the basemap swap needs no re-adding of its source or layers. */
-export function createOutlineMap(
-  main: MapLibreMap,
-  init: { theme: "dark" | "light"; projection: Projection; place: PlaceTarget | null },
-) {
+/** A transparent, non-interactive MapLibre map stacked above the main map and deck's canvas
+ * (pointer-events: none) that follows the main map's camera (centre, zoom, bearing, pitch, padding)
+ * on every move. Maps stack in the order they are made: each is inserted after the canvas container
+ * (map + deck) and before the control container, so the buttons stay on top. */
+function createStackedMap(main: MapLibreMap, className: string) {
   const el = document.createElement("div");
-  el.className = "place-outline";
+  el.className = className;
   el.style.cssText = "position:absolute;inset:0;pointer-events:none;z-index:3;";
-  // after the canvas container (map + deck), before the control container (buttons stay on top)
-  const ctrl = main.getContainer().querySelector(".maplibregl-control-container");
+  // a direct child: an overlay made earlier has a control container of its own inside it
+  const ctrl = main.getContainer().querySelector(":scope > .maplibregl-control-container");
   main.getContainer().insertBefore(el, ctrl);
-  // deck's canvas lives in MapLibre's top-left control corner (z-index 2), so the outline (3) is above
-  // it, and the other corners (buttons, attribution) are lifted above the outline (4)
+  // deck's canvas lives in MapLibre's top-left control corner (z-index 2), so the stacked maps (3) are
+  // above it, and the other corners (buttons, attribution) are lifted above them (4)
   if (!document.getElementById("place-outline-css")) {
     const st = document.createElement("style");
     st.id = "place-outline-css";
@@ -242,14 +267,9 @@ export function createOutlineMap(
       ".maplibregl-ctrl-top-right,.maplibregl-ctrl-bottom-right,.maplibregl-ctrl-bottom-left{z-index:4!important}";
     document.head.append(st);
   }
-  let place: PlaceTarget | null = init.place;
-  let theme = init.theme;
-  let ready = false;
-  /** collections whose source and layers are on the map */
-  const added = new Set<string>();
   const map = new MapLibreMap({
     container: el,
-    style: { version: 8, sources: {}, layers: [] },
+    style: emptyStyle(),
     center: main.getCenter(),
     zoom: main.getZoom(),
     interactive: false,
@@ -270,6 +290,73 @@ export function createOutlineMap(
     map.resize();
     sync();
   };
+  main.on("move", sync);
+  main.on("resize", onResize);
+  return {
+    map,
+    sync,
+    destroy() {
+      main.off("move", sync);
+      main.off("resize", onResize);
+      map.remove();
+      el.remove();
+    },
+  };
+}
+
+/** The basemap's labels (its symbol layers, `splitStyle(…, "labels")`) on a stacked map above deck's
+ * hexagons, so place names stay readable over the cells; the main map draws the rest of the basemap.
+ * A theme swap restyles it with the other basemap's labels; the projection is re-applied on each
+ * style load, as on the main map. */
+export function createLabelMap(
+  main: MapLibreMap,
+  init: { theme: "dark" | "light"; projection: Projection; labels: boolean },
+) {
+  const { map, sync, destroy } = createStackedMap(main, "basemap-labels");
+  let { theme, projection, labels } = init;
+  const restyle = () =>
+    map.setStyle(BASEMAP_STYLE[theme], { transformStyle: (_prev, next) => labelStyle(next, labels, projection) });
+  const applyLabels = () => {
+    for (const l of map.getStyle()?.layers ?? [])
+      map.setLayoutProperty(l.id, "visibility", labels ? "visible" : "none");
+  };
+  map.on("style.load", sync);
+  restyle();
+  return {
+    setTheme(t: "dark" | "light") {
+      theme = t;
+      restyle();
+    },
+    setProjection(p: Projection) {
+      projection = p;
+      if (!map.isStyleLoaded()) return; // the pending style carries it
+      map.setProjection({ type: p === "globe" ? "globe" : "mercator" });
+      sync();
+    },
+    setLabels(on: boolean) {
+      labels = on;
+      if (map.isStyleLoaded()) applyLabels();
+    },
+    canvas: () => map.getCanvas(),
+    destroy,
+  };
+}
+
+/** A stacked map with no basemap that draws only the selected place's outline from the gazetteer
+ * PMTiles. deck draws on its own canvas above every MapLibre layer, so an outline on the main map
+ * would sit under the (85% opaque) hexagons; this one sits above them (and above the labels). It uses
+ * the same projection, and its style never changes, so the basemap swap needs no re-adding of its
+ * source or layers. */
+export function createOutlineMap(
+  main: MapLibreMap,
+  init: { theme: "dark" | "light"; projection: Projection; place: PlaceTarget | null },
+) {
+  const { map, sync, destroy } = createStackedMap(main, "place-outline");
+  let place: PlaceTarget | null = init.place;
+  let theme = init.theme;
+  let ready = false;
+  /** collections whose source and layers are on the map */
+  const added = new Set<string>();
   // add a collection's source and its line and circle layers (each with a casing) the first time it is used
   const ensure = (collection: string) => {
     if (added.has(collection)) return;
@@ -304,8 +391,6 @@ export function createOutlineMap(
     apply();
     sync();
   });
-  main.on("move", sync);
-  main.on("resize", onResize);
   return {
     setPlace(target: PlaceTarget | null) {
       place = target;
@@ -330,11 +415,6 @@ export function createOutlineMap(
       sync();
     },
     canvas: () => map.getCanvas(),
-    destroy() {
-      main.off("move", sync);
-      main.off("resize", onResize);
-      map.remove();
-      el.remove();
-    },
+    destroy,
   };
 }

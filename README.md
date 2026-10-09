@@ -113,7 +113,8 @@ Modelled on calcofi.io/explore ("Help, the tour and feedback"). Logic in `src/li
     is a note and the email, if given, looks like one (`sendUi()` in `sendState.ts`). `postFeedback.ts`
     POSTs `payload.ts`'s body (`app: "obis-hex"`, kind, text, email only when given, url only when
     ticked, the release id and OBIS snapshot, version, viewport, theme, user agent, the sentence and the
-    resolution, the image, a honeypot) as `text/plain` to the shared Ocean Metrics Apps Script (runbook:
+    resolution, the image, and the script's honeypot key `website`, always empty: the dialog has no trap
+    input since 0.7.5, because browser autofill filled it) as `text/plain` to the shared Ocean Metrics Apps Script (runbook:
     erddap-places `docs/feedback.md`), which writes a Google Sheet row, mails the recipients and opens a
     GitHub issue labelled with the kind. The email goes to the Sheet and the mail only, never into the
     issue. States: Sending, Sent, or failed.
@@ -309,6 +310,12 @@ it gets its centroid and a zoom from its latitude span. A single point (a statio
   (white on dark, the kit's `--facet-place` navy on light) and the projection (globe or flat) is mirrored.
   `.map` is `isolation: isolate` so the outline and deck stay below the Controls and Cell panes. The PNG
   export draws the outline canvas too.
+- **Labels above the hexagons (0.7.5).** For the same reason the basemap's labels sat under the hexagons.
+  `createLabelMap()` stacks one more transparent map, made first so it sits between deck and the outline,
+  styled with the basemap's symbol layers only (`labelStyle()`, which also sets their visibility and the
+  projection in the style, so a theme swap keeps both); the main map loads the basemap without them
+  (`splitStyle(style, "base")` through `setStyle`'s `transformStyle`). Both overlays share
+  `createStackedMap()` for the camera follow. The PNG export draws map, deck, labels, outline.
 - **Attribution**: the main map's attribution control carries OBIS, the basemap and, for the selected place,
   `Places: <attribution_html of its collection>` (`creditsFor()`; links open in a new tab, a link already
   credited elsewhere stays plain text). MapLibre has no setter for a custom attribution, so the control is
@@ -408,6 +415,8 @@ budget. 0.5.2 (the place outline) added 9.2 KB, almost all of it `pmtiles` and i
 forbidden marker in the static graph, like DuckDB's bundle names.
 
 ## Versions
+
+- **0.7.5** (2026-10-09): the basemap's labels draw above the hexagons, on a third, transparent MapLibre map stacked between deck and the place outline (`createLabelMap()`; the main map's style keeps every layer but the symbol layers, `splitStyle()`); `b=0` hides them as before and the PNG export includes them. The map opens over North America (`c=-103.7,33.2,2.57`, res 2) instead of the whole world, which stays the "Whole world" preset ([#1](https://github.com/oceanmetrics/obis-hex/issues/1)). The feedback dialog has no hidden honeypot input: Chrome autofill still filled the renamed `xq_note_check` trap (0.7.4) together with the email, and the script dropped a person's feedback as spam; the payload sends `website: ""`.
 
 - **0.7.4** (2026-10-09): the honeypot input is no longer named `website` (Chrome autofill filled it with the email and the script dropped the send as a bot behind a "Sent"); a `skipped` receipt is a failure with the issue fallback.
 - **0.7.3** (2026-10-09): the feedback dialog says "Sent" only on the Apps Script's JSON receipt; any other 200 (Google's HTML error or sign-in page) is a failure with the *open a GitHub issue* fallback. The first live deployment said "Sent" on such pages while nothing arrived.

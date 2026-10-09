@@ -48,6 +48,10 @@ describe('buildFeedbackPayload', () => {
     expect('image' in buildFeedbackPayload({ ...INPUT, image: 'x'.repeat(MAX_IMAGE_DATA_URL_LENGTH + 1) })).toBe(false)
     expect(buildFeedbackPayload({ ...INPUT, image: 'data:image/png;base64,AA' }).image).toBe('data:image/png;base64,AA')
   })
+  it('the honeypot key is always sent, empty when the dialog gives none (0.7.5: no trap input)', () => {
+    const { website: _w, ...noTrap } = INPUT
+    expect(buildFeedbackPayload(noTrap).website).toBe('')
+  })
   it('the honeypot value is carried through', () => {
     expect(buildFeedbackPayload({ ...INPUT, website: 'spam' }).website).toBe('spam')
   })
@@ -210,5 +214,11 @@ describe('one Send button, the GitHub issue as the fallback link (0.6.1)', () =>
     expect(src).toContain('ui.notice.link')
     expect(src).toContain('onclick={openIssue}')
     expect(src).toMatch(/<Button variant="primary"[^>]*onclick=\{send\}/)
+  })
+  it('the dialog has no hidden trap input for autofill to fill (0.7.5 regression: feedback dropped as spam)', () => {
+    const src = readFileSync(resolve(__dirname, '../src/components/FeedbackDialog.svelte'), 'utf8')
+    const inputs = src.match(/<input\b[^>]*>/g) ?? []
+    expect(inputs.filter((i) => /type="(text|email|url|tel)"/.test(i)).map((i) => i.match(/type="(\w+)"/)![1])).toEqual(['email'])
+    expect(src).not.toMatch(/class="trap"|aria-hidden="true"[^>]*bind:value|bind:value=\{website\}/)
   })
 })

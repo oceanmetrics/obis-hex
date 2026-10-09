@@ -36,10 +36,11 @@ function bookmark(over: Record<string, unknown> = {}): string {
 }
 
 describe("legacy h3-db links", () => {
-  it("1. the default view maps to the default state, no notice", () => {
+  it("1. the default view maps to the default state at the Shiny camera, no notice", () => {
     const r = legacyToState(bookmark());
     expect(r.notice).toBe("");
-    expect(r.state).toEqual({ ...DEFAULT_STATE, opacity: 0.85 });
+    // the bookmark carries its own camera (the Shiny default), not obis-hex's opening view (0.7.5)
+    expect(r.state).toEqual({ ...DEFAULT_STATE, opacity: 0.85, lon: -20, lat: 5, zoom: 1.4 });
   });
 
   it("2. seagrasses EOV, res 4 pinned, light, the Caribbean (paper 2 figure)", () => {

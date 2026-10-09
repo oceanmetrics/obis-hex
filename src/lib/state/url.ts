@@ -84,9 +84,11 @@ export const DEFAULT_STATE: AppState = {
   theme: "dark",
   domain: "release",
   proj: "globe",
-  lon: -20,
-  lat: 5,
-  zoom: 1.4,
+  // the opening view: North America and its coasts (0.7.5; was the whole world, -20, 5, 1.4, which is
+  // still the "Whole world" preset in regions.ts)
+  lon: -103.7,
+  lat: 33.2,
+  zoom: 2.57,
   tab: "taxon",
   ctlFolded: false,
   timeFolded: false,
