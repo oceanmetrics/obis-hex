@@ -2,9 +2,11 @@
 // request": an Apps Script /exec answers no OPTIONS, so an `application/json` preflight would be
 // dropped. No `keepalive` either: it caps the body at 64 KiB and a screenshot exceeds that, which
 // rejects at once with no request on the wire. `doFetch` is injected so tests need no network.
-// Any failure (network, CORS, a non-2xx, or the script answering `{ok:false}`) resolves
+// Only the script's own JSON receipt (`{ok:true,…}`) counts as sent. Anything else resolves
 // `{ ok: false }` and the dialog falls back to the GitHub issue link, so feedback is never lost
-// silently.
+// silently: a network or CORS failure, a non-2xx, the script answering `{ok:false}`, and a 200
+// whose body is not that JSON (Apps Script answers HTTP 200 with an HTML page when the deployment
+// is not public, needs authorisation, or hits Google's transient "unable to open the file" error).
 export interface FetchResponseLike {
   ok: boolean;
   json?: () => Promise<unknown>;
@@ -35,8 +37,10 @@ export async function postFeedback(url: string, payload: unknown, doFetch: Fetch
       }
     };
     const body = await read();
-    if (body && body.ok === false) return { ok: false, error: body.error ?? "the feedback server refused it" };
-    return { ok: true, issueUrl: body?.issue_url || undefined };
+    if (!body || typeof body !== "object" || typeof body.ok !== "boolean")
+      return { ok: false, error: "the feedback server answered with a page instead of a receipt" };
+    if (body.ok === false) return { ok: false, error: body.error ?? "the feedback server refused it" };
+    return { ok: true, issueUrl: body.issue_url || undefined };
   } catch {
     return { ok: false, error: "the feedback server could not be reached" };
   }

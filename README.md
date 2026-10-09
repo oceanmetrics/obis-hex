@@ -409,6 +409,7 @@ forbidden marker in the static graph, like DuckDB's bundle names.
 
 ## Versions
 
+- **0.7.3** (2026-10-09): the feedback dialog says "Sent" only on the Apps Script's JSON receipt; any other 200 (Google's HTML error or sign-in page) is a failure with the *open a GitHub issue* fallback. The first live deployment said "Sent" on such pages while nothing arrived.
 - **0.7.2** (2026-10-08): entry size budget 650 → 660 KB; CI gzip measures ~3 KB more than a local build and 0.7.1 failed the budget there (651.1 KB). No code change.
 - **0.7.1**: follows the republished gazetteer. The index bbox and centroid are unwrapped for polygons that
   cross the antimeridian (37 rows), so `cameraFor()` fits them with `fitBounds` (Papahānaumokuākea opens
