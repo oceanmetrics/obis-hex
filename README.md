@@ -16,7 +16,7 @@ serves the app, an S3 bucket serves the Parquet, and the browser does the rest. 
 exception: **Any taxon (WoRMS)** (`aphia:<id>`) is computed on request by the h3t subtree service on
 the msens VM, behind a Varnish cache. The data is built monthly on that VM too (obisindicators
 `refresh_obis_h3.sh`, scheduled from erddap-places; the build pipeline and its diagram are in
-obisindicators [`data-raw/README.md`](https://github.com/marinebon/obisindicators/blob/export-parquet/data-raw/README.md#monthly-obis-h3-refresh-refresh_obis_h3sh)).
+obisindicators [`data-raw/README.md`](https://github.com/marinebon/obisindicators/blob/main/data-raw/README.md#monthly-obis-h3-refresh-refresh_obis_h3sh)).
 
 ```mermaid
 sequenceDiagram
@@ -236,7 +236,7 @@ fallback: bump it when convenient, not for each release. Tests: `tests/release.t
 
 Release `v20260728` at
 `https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3/v20260728/` (written by
-`obisindicators::obis_h3_export_parquet()` 0.7.1, branch `export-parquet`; bucket CORS allows
+`obisindicators::obis_h3_export_parquet()` 0.7.1, then on branch `export-parquet`, merged to `main` 2026-10-12; bucket CORS allows
 GET/HEAD with Range from any origin):
 
 | file | what |
@@ -428,7 +428,7 @@ node scripts/shoot.mjs   # the UI assessment states at phone/laptop/projector â†
 A page URL can also point at another release with `?data=https://â€¦/` (https or a same-origin path), which skips `latest.json`.
 
 To build the local demo release (layout v2) from the South Atlantic demo store, in R with
-obisindicators 0.7.1 on branch `export-parquet`:
+obisindicators 0.7.1 or later (`main`):
 
 ```r
 devtools::load_all("~/Github/marinebon/obisindicators")
