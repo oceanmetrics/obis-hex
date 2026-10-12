@@ -4,9 +4,13 @@
   import { isSynonym, parseTaxonSearch, SEARCH_MIN, searchUrl, type TaxonHit } from "../lib/aphia/h3t";
   import { fmt } from "../lib/format";
 
-  let { base, onpick }: { base: string; onpick: (id: number) => void } = $props();
+  // `initial`: the text typed in the taxon picker when its WoRMS row was chosen, searched at once
+  let { base, onpick, initial = "" }: { base: string; onpick: (id: number) => void; initial?: string } = $props();
 
   let q = $state("");
+  $effect(() => {
+    if (initial) q = initial;
+  });
   let hits = $state.raw<TaxonHit[]>([]);
   let busy = $state(false);
   let error = $state("");

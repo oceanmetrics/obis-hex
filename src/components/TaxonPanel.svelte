@@ -3,7 +3,7 @@
   // counts on a log bar, and the live WoRMS search. Shown in the Controls tab and the taxon Chip.
   import { Picker } from "@marinebon/ui";
   import { parseLayerKey, layerKey, type LayerSel } from "../lib/data/layers";
-  import { isAphiaSearch, logBar, type TaxonItem } from "../lib/data/taxa";
+  import { aphiaItemLabel, isAphiaSearch, logBar, type TaxonItem } from "../lib/data/taxa";
   import { wormsUrl, type TaxonInfo } from "../lib/aphia/h3t";
   import { fmt } from "../lib/format";
   import type { AppState } from "../lib/state/url";
@@ -36,6 +36,10 @@
   const sel: LayerSel = $derived(parseLayerKey(st.layer) ?? { kind: "all" });
   const maxCount = $derived(Math.max(1, ...items.map((i) => i.count ?? 0)));
   let searching = $state(false);
+  // the Picker's search text: the WoRMS row says what it will look up, and opens with it
+  let query = $state("");
+  let aphiaStart = $state("");
+  const shown = $derived(items.map((it) => (isAphiaSearch(it.id) ? { ...it, label: aphiaItemLabel(query) } : it)));
   const showSearch = $derived(searching || sel.kind === "aphia");
   let value = $state<string | null>(null);
   $effect(() => {
@@ -58,6 +62,7 @@
   function pick(it: { id: string }) {
     if (isAphiaSearch(it.id)) {
       searching = true;
+      aphiaStart = query.trim();
       value = st.layer;
       return;
     }
@@ -72,7 +77,7 @@
 </script>
 
 <div class="taxon-panel" class:mbon-fill={fill} bind:this={host}>
-  <Picker {items} bind:value label="taxa" placeholder="Search taxa, EOVs, common names…" {maxHeight} {fill} onselect={pick}>
+  <Picker items={shown} bind:value bind:query label="taxa" placeholder="Search taxa, EOVs, common names…" {maxHeight} {fill} onselect={pick}>
     {#snippet row(it)}
       <span class="lab">{it.label}</span>
       {#if it.count != null}
@@ -91,7 +96,7 @@
       {#if h3tHealth === "down"}
         <p class="hint">The WoRMS subtree service (h3t) is unavailable.</p>
       {:else}
-        <AphiaSearch base={h3tBase} onpick={(id) => { st.layer = layerKey({ kind: "aphia", id }); st.cell = null; searching = false; onpicked?.(); }} />
+        <AphiaSearch base={h3tBase} initial={aphiaStart} onpick={(id) => { st.layer = layerKey({ kind: "aphia", id }); st.cell = null; searching = false; onpicked?.(); }} />
       {/if}
       {#if sel.kind === "aphia"}
         <div class="taxon-line">

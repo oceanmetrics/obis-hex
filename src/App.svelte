@@ -512,6 +512,7 @@
         hasAphia: h3tHealth !== "down",
         totalRecords: decadeCache.get("all")?.total ?? (sel.kind === "all" ? decadeCounts?.total : null) ?? null,
         aphia: sel.kind === "aphia" && aphiaInfo && aphiaInfo.id === sel.id ? { id: sel.id, name: aphiaInfo.scientificName } : null,
+        layer: st.layer,
       },
     ),
   );

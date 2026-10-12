@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { APHIA_ITEM, commonName, logBar, taxonItems } from "../src/lib/data/taxa";
+import { pickerFilter } from "@marinebon/ui/utils";
+import { APHIA_ITEM, aphiaItemLabel, commonName, logBar, taxonItems } from "../src/lib/data/taxa";
 import { parseLayerKey } from "../src/lib/data/layers";
 import { decadeAt, decadeCountsSql, decadeSpan, normalizeCounts, DECADE_DOMAIN } from "../src/lib/release/decades";
 
@@ -48,6 +49,27 @@ describe("taxon picker items", () => {
     expect(it2.filter((i) => i.id.startsWith("eov:")).every((i) => i.disabled)).toBe(true);
     expect(it2.find((i) => i.id === APHIA_ITEM)?.disabled).toBe(true);
     expect(it2.find((i) => i.id === "aphia:2688")?.label).toBe("Cetacea");
+  });
+  it("families are listed only while searching, except the family on the map", () => {
+    const fam = [...GROUPS, { kind: "taxon", rank: "family", taxon: "Delphinidae", n: 900000 },
+      { kind: "taxon", rank: "family", taxon: "Balaenopteridae", n: 300000 }];
+    const all = taxonItems(fam);
+    expect([...new Set(all.map((i) => i.group))]).toContain("Families");
+    expect(all.filter((i) => i.group === "Families").every((i) => i.match === "query")).toBe(true);
+    const onMap = taxonItems(fam, { layer: "taxon:family:Delphinidae" });
+    expect(onMap.find((i) => i.id === "taxon:family:Delphinidae")?.match).toBeUndefined();
+    expect(onMap.find((i) => i.id === "taxon:family:Balaenopteridae")?.match).toBe("query");
+    // with the kit's filter: hidden unfiltered, found by name
+    const ids = (q: string) => pickerFilter(all, q).items.map((i) => i.id);
+    expect(ids("")).not.toContain("taxon:family:Delphinidae");
+    expect(ids("delph")).toContain("taxon:family:Delphinidae");
+  });
+  it("regression: a name the release lacks (Cetacea) still lists the WoRMS search row", () => {
+    // 2026-10-12: typing "Cetacea" filtered out "Search any WoRMS taxon…", so the live layer looked gone
+    expect(items.find((i) => i.id === APHIA_ITEM)?.match).toBe("always");
+    expect(pickerFilter(items, "Cetacea").items.map((i) => i.id)).toEqual([APHIA_ITEM]);
+    expect(aphiaItemLabel("  Cetacea ")).toBe("Search all of WoRMS for “Cetacea”…");
+    expect(aphiaItemLabel("")).toBe("Search any WoRMS taxon…");
   });
   it("common names and log bars", () => {
     expect(commonName("Aves")).toBe("birds");

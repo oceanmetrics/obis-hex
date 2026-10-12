@@ -105,6 +105,25 @@ export const COMMON_NAMES: Record<string, string> = {
   Squaliformes: "dogfish sharks",
   Alismatales: "seagrasses (and kin)",
   Fucales: "rockweeds",
+  // families (listed while searching, 0.9.0)
+  Delphinidae: "dolphins",
+  Balaenopteridae: "rorquals",
+  Balaenidae: "right whales",
+  Physeteridae: "sperm whale",
+  Phocidae: "true seals",
+  Otariidae: "sea lions and fur seals",
+  Cheloniidae: "sea turtles",
+  Laridae: "gulls and terns",
+  Procellariidae: "petrels and shearwaters",
+  Diomedeidae: "albatrosses",
+  Spheniscidae: "penguins",
+  Scombridae: "tunas and mackerels",
+  Carcharhinidae: "requiem sharks",
+  Gadidae: "cods",
+  Clupeidae: "herrings",
+  Acroporidae: "staghorn corals",
+  Zosteraceae: "eelgrasses",
+  Rhizophoraceae: "mangroves",
   // WoRMS infraorder often searched live
   Cetacea: "whales and dolphins",
 };
@@ -128,6 +147,17 @@ export interface TaxonItem {
   count?: number;
   keywords?: string;
   disabled?: boolean;
+  /** the kit's Picker: "always" listed whatever is typed, "query" only while searching */
+  match?: "always" | "query";
+}
+
+/** ranks too long to list unfiltered (~5,800 families): their rows appear only while searching */
+export const QUERY_RANKS = new Set(["family"]);
+
+/** the WoRMS row's label: what it will search for, once something is typed */
+export function aphiaItemLabel(query: string): string {
+  const q = query.trim();
+  return q ? `Search all of WoRMS for “${q}”…` : "Search any WoRMS taxon…";
 }
 
 const RANK_GROUP: Record<string, string> = {
@@ -142,7 +172,9 @@ export const APHIA_ITEM = "aphia:search";
 
 /**
  * Every layer the release serves, as Picker rows grouped "All life" → "Essential Ocean Variables"
- * → Phyla → Classes → Orders → "Any taxon (WoRMS)", most records first within a group. Ids are
+ * → Phyla → Classes → Orders → Families → "Any taxon (WoRMS)", most records first within a group.
+ * Families (`QUERY_RANKS`) are listed only while searching, except the one on the map (`layer`);
+ * the WoRMS search row is listed whatever is typed, so a name the release lacks still leads to it. Ids are
  * layer keys (`all`, `eov:fish`, `taxon:class:Aves`), so the picked id is the URL's `l=`.
  * Labels lead with the scientific name and carry the common name ("Aves — birds"); the common
  * name is also a search keyword.
@@ -156,6 +188,8 @@ export function taxonItems(
     totalRecords?: number | null;
     /** the current live layer, listed under WoRMS so the picker shows it selected */
     aphia?: { id: number; name: string } | null;
+    /** the current layer key: a family on the map stays listed without a search */
+    layer?: string;
   } = {},
 ): TaxonItem[] {
   const out: TaxonItem[] = [
@@ -186,13 +220,15 @@ export function taxonItems(
     const rows = groups.filter((g) => g.kind === "taxon" && g.rank === rank).sort((a, b) => b.n - a.n);
     for (const g of rows) {
       const cn = commonName(g.taxon);
+      const id = layerKey({ kind: "taxon", rank: g.rank, taxon: g.taxon });
       out.push({
-        id: layerKey({ kind: "taxon", rank: g.rank, taxon: g.taxon }),
+        id,
         label: cn ? `${g.taxon} — ${cn}` : g.taxon,
         group: RANK_GROUP[rank] ?? rank,
         count: g.n,
         keywords: `${rank}${cn ? ` ${cn}` : ""}`,
         disabled: o.hasTaxon === false,
+        ...(QUERY_RANKS.has(rank) && id !== o.layer ? { match: "query" as const } : {}),
       });
     }
   }
@@ -205,10 +241,11 @@ export function taxonItems(
     });
   out.push({
     id: APHIA_ITEM,
-    label: "Search any WoRMS taxon…",
+    label: aphiaItemLabel(""),
     group: "Any taxon (WoRMS, live)",
     keywords: "worms aphia species genus family search",
     disabled: o.hasAphia === false,
+    match: "always",
   });
   return out;
 }

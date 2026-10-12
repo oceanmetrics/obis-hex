@@ -9,9 +9,52 @@ coarse resolutions, only the partitions covering the viewport for the fine ones)
 cells with deck.gl's `H3HexagonLayer`, flat or on a globe. No hexagon geometry is shipped: deck.gl
 builds each cell from its H3 index.
 
+## How it runs
+
+"Serverless" here means no server of ours computes a map for the precomputed layers: GitHub Pages
+serves the app, an S3 bucket serves the Parquet, and the browser does the rest. One layer is the
+exception: **Any taxon (WoRMS)** (`aphia:<id>`) is computed on request by the h3t subtree service on
+the msens VM, behind a Varnish cache. The data is built monthly on that VM too (obisindicators
+`refresh_obis_h3.sh`, scheduled from erddap-places; the build pipeline and its diagram are in
+obisindicators [`data-raw/README.md`](https://github.com/marinebon/obisindicators/blob/export-parquet/data-raw/README.md#monthly-obis-h3-refresh-refresh_obis_h3sh)).
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant B as Browser<br/>(Svelte, DuckDB-WASM, deck.gl)
+  participant GH as GitHub Pages<br/>oceanmetrics.io/obis-hex
+  participant S3 as S3 oceanmetrics.io-public<br/>obis-h3/ and gazetteer/
+  participant C as CARTO<br/>basemap
+  participant H as h3tcache (Varnish)<br/>→ h3t on msens
+  B->>GH: index.html, JS, CSS, DuckDB wasm (static, from pages.yml)
+  B->>S3: obis-h3/latest.json (no-cache, 3 s timeout)
+  S3-->>B: base = …/obis-h3/vYYYYMMDD/
+  B->>S3: release.json, files.parquet, stats.parquet, taxon_groups.parquet (once per page)
+  B->>C: style, vector tiles
+  Note over B: planView(): layer × period × res × viewport → one whole file or the parent partitions in view
+  B->>S3: GET the Parquet file(s)
+  S3-->>B: h3 + indicator columns → DuckDB-WASM → H3HexagonLayer
+  Note over B: a pan fetches only new partitions, switching indicator fetches nothing
+  opt Place picked (② Place)
+    B->>S3: gazetteer/ places_index.parquet, places.pmtiles (outline)
+  end
+  opt Any taxon (WoRMS): layer aphia:id
+    B->>H: taxon?q=, subtree?aphiaid=&res=[&decade=][&bbox=]
+    H-->>B: Parquet (Varnish keeps it 7 days) → DuckDB-WASM part_cache
+  end
+```
+
+| host | what | ours? |
+|---|---|---|
+| GitHub Pages | the built app (`dist/`), DuckDB-WASM self-hosted (no CDN) | static |
+| S3 `oceanmetrics.io-public` | `obis-h3/` release (Parquet), `gazetteer/` (places index, PMTiles); CORS `*` | static |
+| CARTO | basemap style and tiles | third party |
+| `h3tcache.marinesensitivity.org` | Varnish → h3t (FastAPI + read-only DuckDB over the OBIS H3 store) on msens; only for `aphia:<id>` | **server** |
+| Google Apps Script | feedback Send (Sheet, mail, GitHub issue), only when configured | third party |
+
 ## What it shows
 
-An MBON product built on the [`@marinebon/ui`](https://github.com/marinebon/ui) kit (v0.4.0): the map is
+An MBON product built on the [`@marinebon/ui`](https://github.com/marinebon/ui) kit (v0.4.1): the map is
 the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-assessment.md`).
 
 - **Header**: the MBON wordmark, *OBIS hex* and its tagline, **Help ▾** (see "Help, the tour and
@@ -28,8 +71,9 @@ the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-a
   ① **Metric**, the dataset step: a taxon and an indicator, which only mean something together (as an
   ERDDAP dataset and its variable), on two sub-tabs. *Taxon*: one picker, filling the pane, of All taxa, the 7 Essential Ocean
   Variables (IOOS definitions, as in `obisindicators::obis_eov_seeds()`), the taxon groups by phylum,
-  class and order (from `taxon_groups.parquet`, most records first, record counts on a log bar, common
-  names for the groups people look for), and **Any taxon (WoRMS)**: the children of any WoRMS AphiaID,
+  class and order, and by family once a release has them (from `taxon_groups.parquet`, most records first,
+  record counts on a log bar, common names for the groups people look for; the ~5,800 families are listed
+  only while searching, so they do not bury the list), and **Any taxon (WoRMS)**: the children of any WoRMS AphiaID,
   computed live by the h3t subtree service (see below; the one layer not in the static release).
   ② **Place**: go to a sea or ocean, or search any of the 14,734 places of the Ocean Metrics gazetteer (sanctuaries, leases, planning areas, lines, undersea features; the place is outlined and credited, see "Place outline"), hexagon size (auto from zoom, the Shiny app's
   mapping capped at 7, or 5 with a decade on a release layer; or pinned), the period, flat or globe.
@@ -141,7 +185,10 @@ indicator SQL over the full OBIS H3 store). The app calls it through its Varnish
 `https://h3tcache.marinesensitivity.org/h3t/` (override with `?h3t=https://…/h3t/` on the page URL
 or `VITE_H3T_BASE` at build time). Code: `src/lib/aphia/h3t.ts`, `src/components/AphiaSearch.svelte`.
 
-- **The control.** "Any taxon (WoRMS)" in the layer picker opens a search box (debounced 250 ms,
+- **The control.** The picker's last row searches WoRMS and is listed whatever is typed (the kit's
+  `match: "always"`, 0.9.0): type a name the release does not precompute, such as *Cetacea*, and the one
+  row left reads "Search all of WoRMS for “Cetacea”…"; Enter opens the search below with that text.
+  Before 0.9.0 typing *Cetacea* filtered the row away and the live layer looked gone. The search box (debounced 250 ms,
   at least 2 letters) over `GET taxon?q=<prefix>&limit=20`, listing name · rank · status · records
   (accepted names first). Choosing a row sets the layer key `aphia:<id>` in the hash
   (`#l=aphia:137092`). The title line and the panel show the WoRMS name and rank from
@@ -419,6 +466,8 @@ budget. 0.5.2 (the place outline) added 9.2 KB, almost all of it `pmtiles` and i
 forbidden marker in the static graph, like DuckDB's bundle names.
 
 ## Versions
+
+- **0.9.0** (2026-10-12): `@marinebon/ui` 0.4.1. The WoRMS search row in the taxon picker is listed whatever is typed and says what it will search for ("Search all of WoRMS for “Cetacea”…"); choosing it opens the WoRMS search with the typed text (regression test in `tests/taxa.test.ts`). Families (`rank=family`, from obisindicators 0.7.2 releases) are a fourth taxon group, listed only while searching (at most 50, "keep typing" past that), except the family on the map; common names added for 18 families people look for (Delphinidae — dolphins, Cheloniidae — sea turtles, …). The README gained "How it runs" (the request diagram and the hosts) and points to obisindicators for the build pipeline diagram.
 
 - **0.8.2** (2026-10-09): the hover tooltip draws above the basemap labels. Since 0.7.5 the labels' stacked map (z-index 3) sat above MapLibre's top-left control corner (z-index 2), which holds deck's canvas and its tooltip, so place names showed through the tooltip. The corner now has `z-index: auto` (no stacking context of its own) and deck's tooltip container is lifted to 5; the canvas stays under the labels. The map's centre (and the globe) now sits in the middle of the part of the map the panes leave open: the camera padding (`mapPadding()`, `src/lib/view/padding.ts`) adds the Controls pane's width on its side to the Time strip's height, so with the Controls open the globe no longer hides its left side behind them and leaves a gap on the right; folding them eases it back to the middle. The `c=` centre is unchanged, so links open on the same place. A pane dragged into the right half pads the right instead; an expanded pane, or one that would leave the map less than 40% of the stage, pads no side. The paper figures, which show the Controls, were re-run.
 
