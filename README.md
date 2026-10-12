@@ -88,7 +88,7 @@ the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-a
   at any res for a WoRMS taxon; taxon groups say so instead.
 - **Cell** (right edge): a pill that lights when a hexagon is clicked; open it for all five indicators.
   Hovering a hexagon shows them too.
-- **Footer** (kit): built by Ocean Metrics · OBIS snapshot · data build date · release · resolution · version · bytes · ms · source.
+- **Footer** (kit): built by Ocean Metrics · OBIS data date · WoRMS version · resolution · version · bytes · ms · source (the release id and the data build date are in About and Cite this data).
 - **Phone**: the panes become bottom sheets (Controls folded at first), the footer wraps.
 - The URL hash holds the whole view, so any link reproduces it (see "URL" below). Old links to the
   Shiny app open the same view here once Caddy redirects them (see "Legacy URLs").
@@ -229,8 +229,8 @@ and a 3 s timeout; it must be an https URL without credentials), and finally the
 `PUBLIC_DATA_BASE` (`v20260728`). Any failure of the fetch (404, network error, timeout, bad JSON)
 falls back to the constant, so the app never waits on, or breaks because of, the pointer. **A new
 release therefore needs no redeploy**: the monthly job writes the new `vYYYYMMDD/` folder, then
-`latest.json`, and the next page load (within about five minutes) reads it; the footer shows the
-release id and the data date. Until the first refresh writes the file the fetch fails (S3 answers 403
+`latest.json`, and the next page load (within about five minutes) reads it; the footer shows its
+OBIS data date and WoRMS version (About and Cite this data give the release id and the build date). Until the first refresh writes the file the fetch fails (S3 answers 403
 or 404; the browser logs one failed request) and the constant applies. The constant is only a
 fallback: bump it when convenient, not for each release. Tests: `tests/release.test.ts`.
 
@@ -467,6 +467,7 @@ forbidden marker in the static graph, like DuckDB's bundle names.
 
 ## Versions
 
+- **0.9.1** (2026-10-12): the footer dates the two sources, `OBIS 2026-10-11 · WoRMS 2026-10-01`: the OBIS data date (`obis_snapshot`, from obisindicators 0.7.3 the newest object in OBIS's `occurrence/`, not the day the refresh ran) and the WoRMS ChecklistBank version (`worms_version`). The data build date and the release id, which repeated the run date, are left to About, Data sources and Cite this data; those, and the citation, now say "OBIS data as of" and name the WoRMS version.
 - **0.9.0** (2026-10-12): `@marinebon/ui` 0.4.1. The WoRMS search row in the taxon picker is listed whatever is typed and says what it will search for ("Search all of WoRMS for “Cetacea”…"); choosing it opens the WoRMS search with the typed text (regression test in `tests/taxa.test.ts`). Families (`rank=family`, from obisindicators 0.7.2 releases) are a fourth taxon group, listed only while searching (at most 50, "keep typing" past that), except the family on the map; common names added for 18 families people look for (Delphinidae — dolphins, Cheloniidae — sea turtles, …). The README gained "How it runs" (the request diagram and the hosts) and points to obisindicators for the build pipeline diagram.
 
 - **0.8.2** (2026-10-09): the hover tooltip draws above the basemap labels. Since 0.7.5 the labels' stacked map (z-index 3) sat above MapLibre's top-left control corner (z-index 2), which holds deck's canvas and its tooltip, so place names showed through the tooltip. The corner now has `z-index: auto` (no stacking context of its own) and deck's tooltip container is lifted to 5; the canvas stays under the labels. The map's centre (and the globe) now sits in the middle of the part of the map the panes leave open: the camera padding (`mapPadding()`, `src/lib/view/padding.ts`) adds the Controls pane's width on its side to the Time strip's height, so with the Controls open the globe no longer hides its left side behind them and leaves a gap on the right; folding them eases it back to the middle. The `c=` centre is unchanged, so links open on the same place. A pane dragged into the right half pads the right instead; an expanded pane, or one that would leave the map less than 40% of the stage, pads no side. The paper figures, which show the Controls, were re-run.

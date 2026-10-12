@@ -656,6 +656,7 @@
       release: release?.release ?? null,
       builtAt: dataDate,
       snapshot: release?.obis_snapshot ?? null,
+      worms: release?.worms_version ?? null,
       obisindicators: (release?.obisindicators_version as string | undefined) ?? null,
       appVersion: __APP_VERSION__,
       url: `${location.origin}${location.pathname}${formatHash(st)}`,
@@ -1048,7 +1049,7 @@
           <a href="https://github.com/marinebon/obisindicators" target="_blank" rel="noopener">obisindicators</a>{release?.obisindicators_version ? ` ${release.obisindicators_version}` : ""}
           into a Parquet release; your browser reads only the files the view needs, with DuckDB-WASM, and nothing runs on a
           server (except the live <i>Any taxon (WoRMS)</i> layer).</p>
-        <p>Data: the OBIS snapshot of {release?.obis_snapshot ?? "…"}, release {release?.release ?? "…"}{dataDate ? `, built ${dataDate}` : ""}. The title is the
+        <p>Data: OBIS as of {release?.obis_snapshot ?? "…"}{release?.worms_version ? `, WoRMS taxonomy of ${release.worms_version}` : ""}, release {release?.release ?? "…"}{dataDate ? `, built ${dataDate}` : ""}. The title is the
           control: click a bold word to change it. Every view is a link.</p>
         <p>A product of the <a href="https://marinebon.org" target="_blank" rel="noopener">Marine Biodiversity Observation Network</a>
           (MBON), built by <a href="https://oceanmetrics.io" target="_blank" rel="noopener">Ocean Metrics</a>. Code: MIT licence,
@@ -1060,7 +1061,7 @@
       {:else if helpModal === "sources"}
         <table class="sources">
           <tbody>
-            {#each sources({ snapshot: release?.obis_snapshot ?? null, release: release?.release ?? null, builtAt: dataDate, year: citeYear(release?.obis_snapshot), place: placeApi && placeData ? placeApi.citationFor(placeRow?.collection ?? null, placeData.layers) : null }) as src (src.name)}
+            {#each sources({ snapshot: release?.obis_snapshot ?? null, worms: release?.worms_version ?? null, release: release?.release ?? null, builtAt: dataDate, year: citeYear(release?.obis_snapshot), place: placeApi && placeData ? placeApi.citationFor(placeRow?.collection ?? null, placeData.layers) : null }) as src (src.name)}
               <tr>
                 <th scope="row"><a href={src.href} target="_blank" rel="noopener">{src.name}</a></th>
                 <td>
@@ -1098,7 +1099,7 @@
   {/if}
 
   <Footer sourceHref="https://github.com/oceanmetrics/obis-hex">
-    {#snippet release()}{footerReleaseText({ snapshot: releaseInfo?.obis_snapshot, dataDate, release: releaseInfo?.release, res: resText, version: __APP_VERSION__ })}{/snippet}
+    {#snippet release()}{footerReleaseText({ snapshot: releaseInfo?.obis_snapshot, worms: releaseInfo?.worms_version, res: resText, version: __APP_VERSION__ })}{/snippet}
     {#snippet timing()}{#if partition}{fmtBytes(viewBytes)} · {Math.round(partition.ms)} ms{:else}…{/if}{/snippet}
   </Footer>
 </div>

@@ -16,7 +16,11 @@ export const LATEST_URL =
 
 export interface ReleaseJson {
   release: string;
+  /** the OBIS data date: the newest object of OBIS's occurrence/ the store was built from (obisindicators
+   * >= 0.7.3; older releases carry the sync date) */
   obis_snapshot?: string;
+  /** the WoRMS (ChecklistBank dataset 2011) version the release's taxonomy came from (obisindicators >= 0.7.2) */
+  worms_version?: string;
   /** ISO UTC time the release was built (written by the exporter) */
   built_at?: string;
   res?: number[];

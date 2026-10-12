@@ -202,7 +202,9 @@ describe("data sources", () => {
     const rows = sources({ snapshot: "2026-07-28", release: "v20260728", year: "2026" });
     expect(rows.map((s) => s.name)).toEqual(["OBIS", "WoRMS", "IOOS Marine Life Data Network: EOV definitions", "CARTO basemaps", "Ocean Metrics gazetteer", "Software"]);
     expect(rows[0].citation).toContain("OBIS (2026) Ocean Biodiversity Information System");
-    expect(rows[0].role).toContain("snapshot 2026-07-28");
+    expect(rows[0].role).toContain("data as of 2026-07-28");
+    expect(rows[1].role).not.toContain("ChecklistBank");
+    expect(sources({ snapshot: "2026-10-11", worms: "2026-10-01", year: "2026" })[1].role).toContain("the 2026-10-01 version, from ChecklistBank");
     expect(rows[1].doi).toBe("10.14284/170");
     expect(rows[2].href).toContain("ioos/marine_life_data_network");
     expect(rows[4].citation).toBeUndefined();

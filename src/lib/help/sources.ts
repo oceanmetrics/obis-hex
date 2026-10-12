@@ -19,6 +19,8 @@ export interface PlaceSource {
 
 export function sources(o: {
   snapshot?: string | null;
+  /** the WoRMS (ChecklistBank) version of the release's taxonomy */
+  worms?: string | null;
   release?: string | null;
   builtAt?: string | null;
   year: string;
@@ -29,14 +31,14 @@ export function sources(o: {
     {
       name: "OBIS",
       href: "https://obis.org",
-      role: `The occurrence records${o.snapshot ? ` (full snapshot ${o.snapshot})` : ""}, aggregated to H3 hexagons in release ${o.release ?? "…"}${o.builtAt ? ` (data built ${o.builtAt})` : ""}.`,
+      role: `The occurrence records${o.snapshot ? ` (data as of ${o.snapshot})` : ""}, aggregated to H3 hexagons in release ${o.release ?? "…"}${o.builtAt ? ` (data built ${o.builtAt})` : ""}.`,
       citation: `OBIS (${o.year}) Ocean Biodiversity Information System. Intergovernmental Oceanographic Commission of UNESCO. https://obis.org`,
       licence: "CC0, CC BY or CC BY-NC, per dataset (cite the datasets you use: manual.obis.org/citing.html)",
     },
     {
       name: "WoRMS",
       href: "https://www.marinespecies.org",
-      role: "The taxonomy behind the taxon groups, the EOVs and the live Any taxon (WoRMS) layer.",
+      role: `The taxonomy behind the taxon groups${o.worms ? ` (the ${o.worms} version, from ChecklistBank)` : ""}, the EOVs and the live Any taxon (WoRMS) layer.`,
       citation: `WoRMS Editorial Board (${o.year}). World Register of Marine Species. https://www.marinespecies.org`,
       licence: "CC BY 4.0",
       doi: "10.14284/170",

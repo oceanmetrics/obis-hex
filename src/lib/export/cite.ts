@@ -6,6 +6,8 @@ export interface CiteInput {
   /** the release's `built_at` (ISO UTC); the citation states its date */
   builtAt?: string | null;
   snapshot?: string | null;
+  /** the WoRMS (ChecklistBank) version of the release's taxonomy */
+  worms?: string | null;
   obisindicators?: string | null;
   appVersion: string;
   url: string;
@@ -20,19 +22,18 @@ export function dataDateText(release: { built_at?: unknown } | null | undefined)
 }
 
 /** the footer's release detail, which the title sentence no longer carries:
- * "OBIS 2026-07-28 · data 2026-10-07 · release v20260728 · res 1 (auto) · v0.6.1" (the OBIS, data and
- * release parts are left out until release.json has loaded) */
+ * "OBIS 2026-10-11 · WoRMS 2026-10-01 · res 1 (auto) · v0.9.1": the dates of the two sources, OBIS's
+ * newest data and the WoRMS version; the release id and the build date are in About, Data sources and
+ * "Cite this data" (0.9.1). Each date is left out until release.json has loaded, or when it lacks it */
 export function footerReleaseText(o: {
   snapshot?: string | null;
-  dataDate?: string | null;
-  release?: string | null;
+  worms?: string | null;
   res: string;
   version: string;
 }): string {
   return [
-    ...(o.release ? [`OBIS ${o.snapshot ?? ""}`.trim()] : []),
-    ...(o.release && o.dataDate ? [`data ${o.dataDate}`] : []),
-    ...(o.release ? [`release ${o.release}`] : []),
+    ...(o.snapshot ? [`OBIS ${o.snapshot}`] : []),
+    ...(o.worms ? [`WoRMS ${o.worms}`] : []),
     o.res,
     `v${o.version}`,
   ].join(" · ");
@@ -53,7 +54,8 @@ export function obisCitation(year: string): string {
 export function releaseCitation(c: CiteInput): string {
   const year = citeYear(c.snapshot);
   const inputs = [
-    c.snapshot ? `OBIS snapshot ${c.snapshot}` : "",
+    c.snapshot ? `OBIS data as of ${c.snapshot}` : "",
+    c.worms ? `WoRMS ${c.worms}` : "",
     `indicators by obisindicators${c.obisindicators ? ` ${c.obisindicators}` : ""} (https://github.com/marinebon/obisindicators)`,
   ].filter(Boolean);
   return (

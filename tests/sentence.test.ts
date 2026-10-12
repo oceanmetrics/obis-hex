@@ -103,7 +103,7 @@ describe("cite", () => {
     const [rel, blank, obis] = t.split("\n");
     expect(rel).toBe(
       "Ocean Metrics for MBON (2026). OBIS hex v0.5.0: OBIS biodiversity indicators on H3 hexagons, release v20260728 " +
-        "(OBIS snapshot 2026-07-28; indicators by obisindicators 0.7.1 (https://github.com/marinebon/obisindicators)). https://oceanmetrics.io/obis-hex/#i=es",
+        "(OBIS data as of 2026-07-28; indicators by obisindicators 0.7.1 (https://github.com/marinebon/obisindicators)). https://oceanmetrics.io/obis-hex/#i=es",
     );
     expect(blank).toBe("");
     expect(obis).toBe("OBIS (2026) Ocean Biodiversity Information System. Intergovernmental Oceanographic Commission of UNESCO. https://obis.org");

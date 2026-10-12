@@ -24,20 +24,28 @@ describe("data build date (0.5.1)", () => {
   it("accepts a bare date", () => expect(dataDateText({ built_at: "2026-10-07" })).toBe("2026-10-07"));
   it("the citation states it only when given", () => {
     const base = { release: "v20260728", snapshot: "2026-07-28", appVersion: "0.5.1", url: "u" };
-    expect(citeText({ ...base, builtAt: "2026-10-07" })).toContain("release v20260728, data built 2026-10-07 (OBIS snapshot");
-    expect(citeText(base)).toContain("release v20260728 (OBIS snapshot");
+    expect(citeText({ ...base, builtAt: "2026-10-07" })).toContain("release v20260728, data built 2026-10-07 (OBIS data as of");
+    expect(citeText(base)).toContain("release v20260728 (OBIS data as of");
+  });
+  it("the citation names the WoRMS version when the release has one (0.9.1)", () => {
+    const base = { release: "v20261012", snapshot: "2026-10-11", appVersion: "0.9.1", url: "u" };
+    expect(citeText({ ...base, worms: "2026-10-01" })).toContain("(OBIS data as of 2026-10-11; WoRMS 2026-10-01; indicators by");
+    expect(citeText(base)).not.toContain("WoRMS 2");
   });
 });
 
-describe("footer release text (0.6.1)", () => {
-  const base = { snapshot: "2026-07-28", dataDate: "2026-10-07", release: "v20260728", res: "res 1 (auto)", version: "0.6.1" };
-  it("snapshot, data date, release, resolution, version, in that order", () => {
-    expect(footerReleaseText(base)).toBe("OBIS 2026-07-28 · data 2026-10-07 · release v20260728 · res 1 (auto) · v0.6.1");
+describe("footer release text (0.9.1)", () => {
+  const base = { snapshot: "2026-10-11", worms: "2026-10-01", res: "res 1 (auto)", version: "0.9.1" };
+  it("the OBIS data date, the WoRMS version, resolution and version, in that order", () => {
+    expect(footerReleaseText(base)).toBe("OBIS 2026-10-11 · WoRMS 2026-10-01 · res 1 (auto) · v0.9.1");
   });
-  it("leaves the data date out when the release has no built_at", () => {
-    expect(footerReleaseText({ ...base, dataDate: null })).toBe("OBIS 2026-07-28 · release v20260728 · res 1 (auto) · v0.6.1");
+  it("carries no release id and no data build date (they are in About and Cite this data)", () => {
+    expect(footerReleaseText(base)).not.toMatch(/release|data |v2026/);
+  });
+  it("a release without worms_version (before obisindicators 0.7.2): OBIS only", () => {
+    expect(footerReleaseText({ ...base, worms: undefined })).toBe("OBIS 2026-10-11 · res 1 (auto) · v0.9.1");
   });
   it("before release.json loads: the resolution and the version only", () => {
-    expect(footerReleaseText({ res: "res 5 (fixed)", version: "0.6.1" })).toBe("res 5 (fixed) · v0.6.1");
+    expect(footerReleaseText({ res: "res 5 (fixed)", version: "0.9.1" })).toBe("res 5 (fixed) · v0.9.1");
   });
 });
