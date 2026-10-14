@@ -37,6 +37,8 @@
   } = $props();
 
   const title = (slug: string) => layers.find((l) => l.slug === slug)?.title ?? slug;
+  // a chosen place's name: the outlined place's, else the summary's (viewing places), else its id
+  const nameOf = (id: string) => (place && place.place_id === id && place.collection === filter?.coll ? place.name : (summary?.names.get(id) ?? id));
   const placeOn = $derived(!!(filter && place && filter.coll === place.collection && filter.ids?.length === 1 && filter.ids[0] === place.place_id));
   const collOn = $derived(!!filter && !filter.ids);
   const coll = $derived(filter?.coll ?? place?.collection ?? null);
@@ -102,7 +104,7 @@
     </div>
     {#if filter}
       <p class="hint">
-        {#if filter.ids === null}every place of {title(filter.coll)}{:else if filter.ids.length === 1}{summary?.names.get(filter.ids[0]) ?? filter.ids[0]} ({title(filter.coll)}){:else}{filter.ids.length} places of {title(filter.coll)}{/if}
+        {#if filter.ids === null}every place of {title(filter.coll)}{:else if filter.ids.length === 1}{nameOf(filter.ids[0])} ({title(filter.coll)}){:else}{filter.ids.length} places of {title(filter.coll)}{/if}
         {#if status}· {status}{/if}
       </p>
     {:else if status}
