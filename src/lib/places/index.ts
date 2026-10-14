@@ -88,8 +88,10 @@ export function parseLayers(json: unknown): PlaceLayer[] {
 
 export async function loadLayers(fetchFn: typeof fetch = fetch): Promise<PlaceLayer[]> {
   // `index/layers.json` is the canonical path; `<base>layers.json` is the fallback
-  let r = await fetchFn(INDEX_LAYERS_URL).catch(() => null);
-  if (!r?.ok) r = await fetchFn(LAYERS_URL);
+  // revalidated on every load (0.10.1): the bucket's heuristic caching kept a pre-`h3` manifest for an
+  // hour after the place × H3 membership was published, so the place filter said "no membership"
+  let r = await fetchFn(INDEX_LAYERS_URL, { cache: "no-cache" }).catch(() => null);
+  if (!r?.ok) r = await fetchFn(LAYERS_URL, { cache: "no-cache" });
   if (!r.ok) throw new Error(`gazetteer manifest: HTTP ${r.status}`);
   return parseLayers(await r.json());
 }

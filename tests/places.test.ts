@@ -72,8 +72,10 @@ describe("manifest", () => {
   it("loads index/layers.json first and falls back to <base>layers.json", async () => {
     const body = readFileSync(`${dir}/layers.json`, "utf8");
     const calls: string[] = [];
-    const fake = (fail: string[]) => (async (url: string) => {
+    const modes: (RequestCache | undefined)[] = [];
+    const fake = (fail: string[]) => (async (url: string, init?: RequestInit) => {
       calls.push(url);
+      modes.push(init?.cache);
       return fail.includes(url) ? ({ ok: false, status: 404 } as Response) : ({ ok: true, status: 200, json: async () => JSON.parse(body) } as Response);
     }) as unknown as typeof fetch;
     expect((await loadLayers(fake([]))).length).toBe(3);
@@ -82,6 +84,8 @@ describe("manifest", () => {
     expect((await loadLayers(fake([INDEX_LAYERS_URL]))).length).toBe(3);
     expect(calls).toEqual([INDEX_LAYERS_URL, LAYERS_URL]);
     await expect(loadLayers(fake([INDEX_LAYERS_URL, LAYERS_URL]))).rejects.toThrow(/HTTP 404/);
+    // regression (0.10.1): the manifest is revalidated, never taken from the browser's heuristic cache
+    expect(new Set(modes)).toEqual(new Set(["no-cache"]));
   });
   it("rejects a manifest with no layers", () => {
     expect(() => parseLayers({ schema: 1 })).toThrow(/no layers/);
