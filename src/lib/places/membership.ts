@@ -264,7 +264,7 @@ export class MemberCache {
   manifest(url: string): Promise<MembershipManifest> {
     let p = this.#json.get(url);
     if (!p) {
-      p = this.fetchFn(url)
+      p = this.fetchFn(url, { cache: "no-cache" })
         .then((r) => {
           if (!r.ok) throw new Error(`membership.json: HTTP ${r.status}`);
           return r.json();

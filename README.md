@@ -512,6 +512,11 @@ forbidden marker in the static graph, like DuckDB's bundle names.
 
 ## Versions
 
+- **0.10.1** (2026-10-14): the gazetteer manifest (`layers.json`) and each `membership.json` are fetched with
+  `cache: "no-cache"`. The bucket sent them without `Cache-Control`, so a browser that had loaded the morning's
+  manifest kept it heuristically for about an hour after the membership went live and the place filter said
+  "no hexagon membership". The bucket's `layers.json` now carries `Cache-Control: no-cache` too.
+
 - **0.10.0** (2026-10-14): filter and summarize by gazetteer place. The Place tab adds **only hexagons in**
   (everywhere · this place · all of its collection) and **view as** (hexagons · places); new URL keys `f=` (a
   collection, one place or a set) and `v=places`. The filter keeps the hexagons a place covers, from the
