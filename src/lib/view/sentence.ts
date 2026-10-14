@@ -63,6 +63,14 @@ export function placePart(inView: boolean, parts?: { loaded: number; total: numb
   };
 }
 
+/** the place filter in words (0.10.0): "in Monterey Bay NMS (National Marine Sanctuaries)", "in
+ * National Marine Sanctuaries (every place)", "in 3 places (National Marine Sanctuaries)" */
+export function withinPart(f: { coll: string; ids: string[] | null }, title: string, name: (id: string) => string): SentencePart {
+  if (!f.ids) return { label: `in ${title}`, qual: "(every place)" };
+  if (f.ids.length === 1) return { label: `in ${name(f.ids[0])}`, qual: `(${title})` };
+  return { label: `in ${fmt(f.ids.length)} places`, qual: `(${title})` };
+}
+
 export function scalePart(res: number): SentencePart {
   return { label: `${hexAreaLabel(res)} hexagons`, qual: "" };
 }
@@ -84,13 +92,18 @@ export function sentenceParts(o: {
   parts?: { loaded: number; total: number } | null;
   res: number;
   indicator: Indicator;
+  /** the place filter's words (withinPart), replacing "worldwide" / "in view" */
+  within?: SentencePart | null;
+  /** viewing places: one value per place, pooled from its hexagons */
+  perPlace?: boolean;
 }): SentenceParts {
+  const ind = indicatorPart(o.indicator);
   return {
     taxon: taxonPart(o.sel, o.aphia),
     period: periodPart(o.decade),
-    place: placePart(o.inView, o.parts),
-    scale: scalePart(o.res),
-    indicator: indicatorPart(o.indicator),
+    place: o.within ?? placePart(o.inView, o.parts),
+    scale: o.perPlace ? { label: "per place", qual: `(from ${hexAreaLabel(o.res)} hexagons, area-weighted)` } : scalePart(o.res),
+    indicator: o.perPlace && o.indicator !== "n" ? { ...ind, qual: "(mean of the hexagons)" } : ind,
   };
 }
 

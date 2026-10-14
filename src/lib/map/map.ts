@@ -67,8 +67,33 @@ export interface PlaceTarget {
   credit?: string;
 }
 
+/** the place filter on the map (0.10.0): its places outlined thinly, and, viewing places, each filled
+ * with its colour (`fill`: place_id → css colour; null = outlines only) */
+export interface AreaTarget {
+  collection: string;
+  pmtiles?: string;
+  /** null = every place of the collection */
+  ids: string[] | null;
+  fill: Record<string, string> | null;
+  opacity: number;
+}
+
+/** the polygons of the filter's places (null ids = all of the collection's polygons) */
+export function areaFilter(ids: string[] | null): FilterSpecification {
+  const poly = ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]];
+  return (ids ? ["all", poly, ["in", ["get", "place_id"], ["literal", ids]]] : poly) as FilterSpecification;
+}
+
+/** a fill colour per place (transparent for a place without one) */
+export function areaFillColor(fill: Record<string, string> | null): unknown {
+  const e = Object.entries(fill ?? {});
+  return e.length ? ["match", ["get", "place_id"], ...e.flat(), "rgba(0,0,0,0)"] : "rgba(0,0,0,0)";
+}
+
 /** the source and layer ids of one collection on the outline map */
 export const outlineIds = (collection: string) => ({
+  areaFill: `gz-${collection}-area-fill`,
+  areaLine: `gz-${collection}-area-line`,
   source: `gz-${collection}`,
   casing: `gz-${collection}-casing`,
   line: `gz-${collection}-line`,
@@ -106,6 +131,8 @@ export interface MapHandle {
   setLabels(on: boolean): void;
   /** outline one gazetteer place (its collection's PMTiles and `place_id`) and credit its collection, or none (null) */
   setPlace(target: PlaceTarget | null): void;
+  /** outline (and, viewing places, fill) the place filter's places, or none (null) */
+  setAreas(target: AreaTarget | null): void;
   /** the map and hexagons as one canvas (basemap + deck overlay), for the PNG export */
   snapshot(): HTMLCanvasElement;
   /** the visible bounds [west, south, east, north] (west may be < -180 with world copies) */
@@ -211,6 +238,9 @@ export function createMap(
       if (target?.credit !== place?.credit) setCredit(target?.credit);
       place = target;
       outline.setPlace(target);
+    },
+    setAreas(target) {
+      outline.setAreas(target);
     },
     snapshot() {
       const base = map.getCanvas();
@@ -357,6 +387,7 @@ export function createOutlineMap(
 ) {
   const { map, sync, destroy } = createStackedMap(main, "place-outline");
   let place: PlaceTarget | null = init.place;
+  let area: AreaTarget | null = null;
   let theme = init.theme;
   let ready = false;
   /** collections whose source and layers are on the map */
@@ -367,8 +398,13 @@ export function createOutlineMap(
     added.add(collection);
     const ids = outlineIds(collection);
     const c = OUTLINE_COLORS[theme];
-    map.addSource(ids.source, { type: "vector", url: `pmtiles://${place?.collection === collection && place.pmtiles ? place.pmtiles : pmtilesUrl(collection)}` });
+    const url = place?.collection === collection && place.pmtiles ? place.pmtiles : area?.collection === collection && area.pmtiles ? area.pmtiles : pmtilesUrl(collection);
+    map.addSource(ids.source, { type: "vector", url: `pmtiles://${url}` });
     const base = { source: ids.source, "source-layer": collection } as const;
+    // the filter's places, under the selected place's outline
+    map.addLayer({ id: ids.areaFill, type: "fill", ...base, filter: placeFilter(null), paint: { "fill-color": "rgba(0,0,0,0)" } });
+    map.addLayer({ id: ids.areaLine, type: "line", ...base, filter: placeFilter(null), layout: { "line-join": "round" },
+      paint: { "line-color": c.line, "line-width": 1, "line-opacity": 0.8 } });
     map.addLayer({ id: ids.casing, type: "line", ...base, filter: kindFilter(null, false), layout: { "line-join": "round" },
       paint: { "line-color": c.casing, "line-width": 5, "line-opacity": 0.7 } });
     map.addLayer({ id: ids.line, type: "line", ...base, filter: kindFilter(null, false), layout: { "line-join": "round" },
@@ -382,8 +418,16 @@ export function createOutlineMap(
   const apply = () => {
     if (!ready) return;
     if (place) ensure(place.collection);
+    if (area) ensure(area.collection);
     for (const coll of added) {
       const ids = outlineIds(coll);
+      const a = area?.collection === coll ? area : null;
+      map.setFilter(ids.areaFill, a?.fill ? areaFilter(a.ids) : placeFilter(null));
+      map.setFilter(ids.areaLine, a ? areaFilter(a.ids) : placeFilter(null));
+      if (a?.fill) {
+        map.setPaintProperty(ids.areaFill, "fill-color", areaFillColor(a.fill) as string);
+        map.setPaintProperty(ids.areaFill, "fill-opacity", a.opacity);
+      }
       const id = place?.collection === coll ? place.place_id : null;
       for (const l of [ids.casing, ids.line]) map.setFilter(l, kindFilter(id, false));
       for (const l of [ids.pointCasing, ids.point]) map.setFilter(l, kindFilter(id, true));
@@ -400,12 +444,17 @@ export function createOutlineMap(
       place = target;
       apply();
     },
+    setAreas(target: AreaTarget | null) {
+      area = target;
+      apply();
+    },
     setTheme(t: "dark" | "light") {
       theme = t;
       const c = OUTLINE_COLORS[t];
       for (const coll of added) {
         const ids = outlineIds(coll);
         map.setPaintProperty(ids.line, "line-color", c.line);
+        map.setPaintProperty(ids.areaLine, "line-color", c.line);
         map.setPaintProperty(ids.casing, "line-color", c.casing);
         map.setPaintProperty(ids.point, "circle-color", c.line);
         map.setPaintProperty(ids.point, "circle-stroke-color", c.casing);

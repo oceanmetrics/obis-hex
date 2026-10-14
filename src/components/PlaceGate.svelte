@@ -21,6 +21,12 @@
     error?: string;
     onsea: (r: Region) => void;
     onplace: (row: PlaceRow) => void;
+    filter?: unknown;
+    view?: "hex" | "places";
+    summary?: unknown;
+    filterStatus?: string;
+    onfilter?: (f: any) => void;
+    onview?: (v: "hex" | "places") => void;
   } = $props();
 
   onMount(() => onneed());

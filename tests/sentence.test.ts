@@ -7,6 +7,7 @@ import {
   scalePart,
   sentenceParts,
   sentenceText,
+  withinPart,
   taxonPart,
 } from "../src/lib/view/sentence";
 import { citeText } from "../src/lib/export/cite";
@@ -82,6 +83,24 @@ describe("title sentence", () => {
   it("place: worldwide vs in view", () => {
     expect(placePart(false)).toEqual({ label: "worldwide", qual: "" });
     expect(placePart(true)).toEqual({ label: "in view", qual: "" });
+  });
+});
+
+describe("place filter and per-place view (0.10.0)", () => {
+  const name = (id: string) => ({ "NMS:MBNMS": "Monterey Bay" })[id] ?? id;
+  it("within: one place, every place, a set", () => {
+    expect(withinPart({ coll: "s", ids: ["NMS:MBNMS"] }, "Sanctuaries", name)).toEqual({ label: "in Monterey Bay", qual: "(Sanctuaries)" });
+    expect(withinPart({ coll: "s", ids: null }, "Sanctuaries", name)).toEqual({ label: "in Sanctuaries", qual: "(every place)" });
+    expect(withinPart({ coll: "s", ids: ["a", "b", "c"] }, "Sanctuaries", name)).toEqual({ label: "in 3 places", qual: "(Sanctuaries)" });
+  });
+  it("the filter replaces worldwide / in view; per place says how the value was pooled", () => {
+    const base = { sel: { kind: "all" } as const, decade: null, inView: true, res: 5 };
+    const hex = sentenceParts({ ...base, indicator: "es", within: { label: "in Monterey Bay", qual: "(Sanctuaries)" } });
+    expect(sentenceText(hex)).toBe("All taxa, all years, in Monterey Bay (Sanctuaries), ~253 km² hexagons: ES(50)");
+    const pp = sentenceParts({ ...base, indicator: "es", within: { label: "in Sanctuaries", qual: "(every place)" }, perPlace: true });
+    expect(sentenceText(pp)).toBe("All taxa, all years, in Sanctuaries (every place), per place (from ~253 km² hexagons, area-weighted): ES(50) (mean of the hexagons)");
+    const n = sentenceParts({ ...base, indicator: "n", within: { label: "in Sanctuaries", qual: "(every place)" }, perPlace: true });
+    expect(sentenceText(n).endsWith(": Records")).toBe(true); // records add up: no "mean of the hexagons"
   });
 });
 

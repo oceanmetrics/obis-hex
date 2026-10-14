@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { REGIONS, SEAS_GROUP } from "../src/lib/view/regions";
 import type { StyleSpecification } from "maplibre-gl";
-import { placeFilter, kindFilter, outlineIds, OUTLINE_COLORS, splitStyle, labelStyle } from "../src/lib/map/map";
+import { areaFillColor, areaFilter, placeFilter, kindFilter, outlineIds, OUTLINE_COLORS, splitStyle, labelStyle } from "../src/lib/map/map";
 import { DEFAULT_STATE } from "../src/lib/state/url";
 import { zoomToRes } from "../src/lib/state/resolution";
 
@@ -35,7 +35,15 @@ describe("outline filters and ids", () => {
     const a = outlineIds("boem_wind_leases");
     const b = outlineIds("calcofi_lines");
     expect(a.source).toBe("gz-boem_wind_leases");
-    expect(new Set([...Object.values(a), ...Object.values(b)]).size).toBe(10);
+    expect(new Set([...Object.values(a), ...Object.values(b)]).size).toBe(14); // 7 ids each (0.10.0: + area fill and line)
+  });
+  it("the filter's areas: polygons only, every one or the chosen ids; a fill colour per place (0.10.0)", () => {
+    const poly = ["in", ["geometry-type"], ["literal", ["Polygon", "MultiPolygon"]]];
+    expect(areaFilter(null)).toEqual(poly);
+    expect(areaFilter(["a", "b"])).toEqual(["all", poly, ["in", ["get", "place_id"], ["literal", ["a", "b"]]]]);
+    expect(areaFillColor({ a: "rgb(1,2,3)", b: "rgb(4,5,6)" })).toEqual(["match", ["get", "place_id"], "a", "rgb(1,2,3)", "b", "rgb(4,5,6)", "rgba(0,0,0,0)"]);
+    expect(areaFillColor(null)).toBe("rgba(0,0,0,0)");
+    expect(areaFillColor({})).toBe("rgba(0,0,0,0)");
   });
 });
 
