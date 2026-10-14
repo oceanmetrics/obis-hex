@@ -18,6 +18,12 @@
 //                             the gazetteer index, percent-encoded (`pl=BOEM:OCS-P%200561`)
 //   pc=<collection>           the gazetteer collection of `pl`, written only when the id occurs in more than
 //                             one collection (0.7.0); `pl` alone opens the first collection that has it
+// and the place filter and view (0.10.0), each written only when set, after the layout keys:
+//   f=<coll>                  only the hexagons inside the places of a gazetteer collection: all of them,
+//   f=<coll>|<id>             one place,
+//   f=<coll>|<id>,<id>,…      or a set (ids sorted, so a set has one spelling); `|` and `,` are not in
+//                             the id alphabet, so nothing is escaped (CalCOFI explore's `area=in:`/`ins:`)
+//   v=places                  view as places: one row and one colour per place of the filter (0.10.0)
 import { isIndicator, parseLayerKey, layerKey, type Indicator } from "../data/layers";
 import { RES_MAX } from "./resolution";
 
@@ -48,11 +54,37 @@ export const LAYOUT_KEYS = ["k", "cc", "tc", "x", "xo", "b", "pl", "pc"] as cons
 const H3_RE = /^[0-9a-f]{15}$/;
 /** an Ocean Metrics gazetteer place id, the alphabet of the whole index: `NMS:MBNMS`, `MRGID:8439`,
  * `GEBCO:1001`, `BOEM:OCS-P 0561`, `ONMS:channel-islands-national-marine-sanctuary:northern-section`
- * (letters, digits and `: _ - .` and spaces; 1-80 characters). It goes into a map filter only, never
- * into SQL; anything else in a link is dropped. */
+ * (letters, digits and `: _ - .` and spaces; 1-80 characters). It goes into map filters and, for the
+ * place filter's membership (0.10.0), into SQL through `lit()` only; anything else in a link is dropped. */
 export const PLACE_ID_RE = /^[A-Za-z0-9:_. -]{1,80}$/;
 /** a gazetteer collection slug (`boem_wind_leases`), the `pc=` value */
 export const PLACE_COLL_RE = /^[a-z][a-z0-9_]{0,63}$/;
+/** the most places one filter link may name */
+export const FILTER_MAX_IDS = 500;
+
+/** the place filter: a collection, and some of its places (null = every place of it) */
+export interface PlaceFilter {
+  coll: string;
+  ids: string[] | null;
+}
+
+/** `f=` → a filter; null for anything malformed (an id outside the alphabet drops the whole filter,
+ * so a link never filters by fewer places than it names) */
+export function parseFilter(v: string | null | undefined): PlaceFilter | null {
+  if (!v) return null;
+  const at = v.indexOf("|");
+  const coll = at < 0 ? v : v.slice(0, at);
+  if (!PLACE_COLL_RE.test(coll)) return null;
+  if (at < 0) return { coll, ids: null };
+  const ids = [...new Set(v.slice(at + 1).split(","))].sort();
+  if (!ids.length || ids.length > FILTER_MAX_IDS || !ids.every((id) => PLACE_ID_RE.test(id))) return null;
+  return { coll, ids };
+}
+
+/** a filter → its `f=` value (unencoded) */
+export function formatFilter(f: PlaceFilter): string {
+  return f.ids ? `${f.coll}|${[...new Set(f.ids)].sort().join(",")}` : f.coll;
+}
 
 export interface AppState {
   indicator: Indicator;
@@ -88,6 +120,10 @@ export interface AppState {
   place: string | null;
   /** its collection, set only when `place` occurs in more than one collection; null otherwise */
   placeColl: string | null;
+  /** only the hexagons inside these places; null = everywhere */
+  filter: PlaceFilter | null;
+  /** hexagons, or one row and colour per place of the filter */
+  view: "hex" | "places";
 }
 
 export const DEFAULT_STATE: AppState = {
@@ -113,6 +149,8 @@ export const DEFAULT_STATE: AppState = {
   labels: true,
   place: null,
   placeColl: null,
+  filter: null,
+  view: "hex",
 };
 
 const round = (x: number, d: number) => Number(x.toFixed(d));
@@ -140,7 +178,9 @@ export function formatHash(s: AppState): string {
   if (!s.labels) p.push(["b", "0"]);
   if (s.place) p.push(["pl", s.place]);
   if (s.place && s.placeColl) p.push(["pc", s.placeColl]);
-  return `#${p.map(([k, v]) => `${k}=${k === "l" ? v : encodeURIComponent(v).replace(/%2C/g, ",").replace(/%3A/g, ":")}`).join("&")}`;
+  if (s.filter) p.push(["f", formatFilter(s.filter)]);
+  if (s.view !== DEFAULT_STATE.view) p.push(["v", s.view]);
+  return `#${p.map(([k, v]) => `${k}=${k === "l" ? v : encodeURIComponent(v).replace(/%2C/g, ",").replace(/%3A/g, ":").replace(/%7C/g, "|")}`).join("&")}`;
 }
 
 /** raw (undecoded) hash params; `l` is decoded by parseLayerKey, the rest here. */
@@ -212,6 +252,8 @@ export function parseHash(hash: string): AppState {
   if (PLACE_ID_RE.test(pl)) s.place = pl;
   const pc = p.get("pc") ?? "";
   if (s.place && PLACE_COLL_RE.test(pc)) s.placeColl = pc;
+  s.filter = parseFilter(p.get("f"));
+  if (p.get("v") === "places") s.view = "places";
   return s;
 }
 

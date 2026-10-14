@@ -51,7 +51,7 @@ export const TOUR_STOPS: TourStop[] = [
     target: tabSel("place"),
     tab: "place",
     title: "② Place",
-    text: "Go to a sea, or search 14,000+ places from the Ocean Metrics gazetteer (sanctuaries, leases, planning areas, lines, undersea features): the place is outlined on the map and credited. Then set the hexagon size and the decade, or turn the flat map into a globe.",
+    text: "Go to a sea, or search 14,000+ places from the Ocean Metrics gazetteer (sanctuaries, leases, planning areas, lines, undersea features): the place is outlined on the map and credited, and you can keep only the hexagons inside it or view one value per place. Then set the hexagon size and the decade, or turn the flat map into a globe.",
   },
   {
     id: "time",

@@ -9,6 +9,10 @@
   import type { PickerItem } from "@marinebon/ui";
   import { REGIONS, type Region } from "../lib/view/regions";
   import { fold, groupsFor, placeKey, resolvePlace, type PlaceData, type PlaceRow } from "../lib/places/index";
+  import type { PlaceStat } from "../lib/places/membership";
+  import type { Indicator } from "../lib/data/layers";
+  import type { PlaceFilter as Filter } from "../lib/state/url";
+  import PlaceFilter from "./PlaceFilter.svelte";
 
   let {
     note,
@@ -19,6 +23,12 @@
     error = "",
     onsea,
     onplace,
+    filter = null,
+    view = "hex",
+    summary = null,
+    filterStatus = "",
+    onfilter,
+    onview,
   }: {
     note: string;
     maxHeight?: string;
@@ -31,7 +41,19 @@
     error?: string;
     onsea: (r: Region) => void;
     onplace: (row: PlaceRow) => void;
+    /** the place filter (`f=`), the view (`v=`), the per-place numbers and a status line (0.10.0) */
+    filter?: Filter | null;
+    view?: "hex" | "places";
+    summary?: { rows: PlaceStat[]; names: Map<string, string>; indicator: Indicator; res: number } | null;
+    filterStatus?: string;
+    onfilter?: (f: Filter | null) => void;
+    onview?: (v: "hex" | "places") => void;
   } = $props();
+
+  function onrow(coll: string, id: string) {
+    const row = data ? resolvePlace(id, data.rows, coll) : null;
+    if (row) onplace(row);
+  }
 
   let value = $state<string | null>(null);
   let q = $state("");
@@ -130,6 +152,9 @@
       {#if r && r.place_id !== r.name}<span class="pid" title={r.place_id}>{r.place_id}</span>{/if}
     {/snippet}
   </Picker>
+  {#if onfilter && onview}
+    <PlaceFilter place={selected} layers={data?.layers ?? []} {filter} {view} {summary} status={filterStatus} {onfilter} {onview} {onrow} />
+  {/if}
 </div>
 
 <style>

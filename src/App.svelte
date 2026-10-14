@@ -13,7 +13,8 @@
     type LayerSel,
   } from "./lib/data/layers";
   import { fileUrl } from "./lib/release/manifest";
-  import { planView, type Bounds } from "./lib/view/viewport";
+  import { coverCells, MAX_PARENTS, planView, type Bounds } from "./lib/view/viewport";
+  import { getResolution } from "h3-js";
   import { mapPadding, type PaneSpan } from "./lib/view/padding";
   import {
     loadMeta,
@@ -79,7 +80,7 @@
   import SharePanel from "./components/SharePanel.svelte";
   import DecadeBars from "./components/DecadeBars.svelte";
   import { taxonItems, type TaxonGroupRow } from "./lib/data/taxa";
-  import { coverageText, hexAreaLabel, resNote, sentenceParts, sentenceText } from "./lib/view/sentence";
+  import { coverageText, hexAreaLabel, resNote, sentenceParts, sentenceText, withinPart } from "./lib/view/sentence";
   import {
     decadeAt,
     decadeCountsSql,
@@ -90,7 +91,7 @@
     type DecadeCount,
   } from "./lib/release/decades";
   import type { Region } from "./lib/view/regions";
-  import type { PlaceData, PlaceRow } from "./lib/places/index";
+  import type { MemberCache, Members, MembershipManifest, PlaceData, PlaceRow } from "./lib/places/index";
   import { OBIS_CREDIT } from "./lib/places/urls";
   import PlaceGate from "./components/PlaceGate.svelte";
   import { downloadCanvas, pngName, stampPng } from "./lib/export/png";
@@ -153,7 +154,8 @@
   let healthError = $state("");
   let release = $state.raw<ReleaseJson | null>(null);
   let meta = $state.raw<ReleaseMeta | null>(null);
-  let partition = $state.raw<Partition | null>(null);
+  /** the view as loaded; `partition` is it, cut to the place filter's hexagons when one is set */
+  let loaded = $state.raw<Partition | null>(null);
   /** parent partitions fetched by the last split load (the rest came from the DuckDB cache) */
   let fetchedLast = $state(0);
   let bounds = $state.raw<Bounds | null>(null);
@@ -203,9 +205,152 @@
         : "",
   );
   const fileRow = $derived(plan && !plan.split ? plan.files[0] : null);
+  // the gazetteer (manifest + index): the picker, its search and the index reader are a lazy chunk,
+  // fetched the first time the Place panel opens or at once when a link carries pl=; the outline, its
+  // credit and the picker's selection come from it
+  let placeApi = $state.raw<typeof import("./lib/places/index") | null>(null);
+  let PlacePanelC = $state.raw<Component<any> | null>(null);
+  let placeData = $state.raw<PlaceData | null>(null);
+  let placeError = $state("");
+  const filterLayer = $derived(st.filter && placeData ? (placeData.layers.find((l) => l.slug === st.filter!.coll) ?? null) : null);
+  let placeBusy = false;
+  function needPlaces() {
+    if (placeData || placeBusy) return;
+    placeBusy = true;
+    Promise.all([import("./lib/places/index"), import("./components/PlacePanel.svelte")])
+      .then(async ([api, panel]) => {
+        placeApi = api;
+        PlacePanelC = panel.default;
+        placeData = await api.ensurePlaces(engine);
+        placeError = "";
+      })
+      .catch((e) => (placeError = e instanceof Error ? e.message : String(e)))
+      .finally(() => (placeBusy = false));
+  }
+  $effect(() => {
+    if (st.place || st.filter || st.tab === "place") untrack(needPlaces);
+  });
+  const placeRow = $derived(placeApi && placeData && st.place ? placeApi.resolvePlace(st.place, placeData.rows, st.placeColl) : null);
+  const placeTarget = $derived(
+    placeApi && placeData && placeRow
+      ? {
+          collection: placeRow.collection,
+          place_id: placeRow.place_id,
+          pmtiles: placeData.layers.find((l) => l.slug === placeRow.collection)?.pmtiles,
+          credit: placeApi.creditsFor(placeRow.collection, placeData.layers, [OBIS_CREDIT]),
+        }
+      : placeApi && placeData && st.filter
+        ? // no outlined place: the filter's collection is still credited (an empty id outlines nothing)
+          { collection: st.filter.coll, place_id: "", pmtiles: filterLayer?.pmtiles, credit: placeApi.creditsFor(st.filter.coll, placeData.layers, [OBIS_CREDIT]) }
+        : null,
+  );
+  $effect(() => {
+    handle?.setPlace(placeTarget);
+  });
+
+  // the place filter's membership (0.10.0): the gazetteer's place × H3 cells with the share of each
+  // inside, read for the view's res (and, at the split res 6–7, the parents in view) ----
+  let memberCache: MemberCache | null = null;
+  let memberMan = $state.raw<{ url: string; m: MembershipManifest } | null>(null);
+  let members = $state.raw<{ key: string; m: Members } | null>(null);
+  let filterStatus = $state("");
+  $effect(() => {
+    const url = filterLayer?.h3;
+    if (!url || !placeApi) return;
+    memberCache ??= new placeApi.MemberCache(engine);
+    let off = false;
+    memberCache.manifest(url).then(
+      (m) => !off && (memberMan = { url, m }),
+      (e) => !off && (filterStatus = `the places' hexagons could not be listed (${errorLine(e)})`),
+    );
+    return () => (off = true);
+  });
+  // one string per (collection, res, places, parents in view), so a pan that needs no new parent reloads nothing
+  const memberKey = $derived.by(() => {
+    const man = memberMan && memberMan.url === filterLayer?.h3 ? memberMan.m : null;
+    if (!st.filter || !man || !placeApi) return "";
+    const pr = placeApi.parentResOf(man, res);
+    let view: string[] | null = null;
+    if (pr !== null) {
+      const own = plan?.split ? plan.files.map((f) => f.parent ?? "") : null;
+      view = own && own.every((c) => c && getResolution(c) === pr) ? own : bounds ? coverCells(bounds, pr, MAX_PARENTS) : null;
+      if (!view) return "";
+    }
+    return JSON.stringify([memberMan!.url, res, st.filter.ids, view && [...view].sort()]);
+  });
+  $effect(() => {
+    const key = memberKey;
+    if (!key || !placeApi || !memberCache || !memberMan) return;
+    const [url, r, ids, view] = JSON.parse(key) as [string, number, string[] | null, string[] | null];
+    const api = placeApi, cache = memberCache, man = memberMan.m, dir = api.collectionDir(url);
+    let off = false;
+    filterStatus = "loading the places' hexagons…";
+    (async () => {
+      const pr = api.parentResOf(man, r);
+      const held = ids && pr !== null ? await cache.parents(dir + man.parents, r, ids) : null;
+      const files = api.membershipFiles(man, r, view ? new Set(view) : null, held) ?? [];
+      const m = await cache.members(files.map((f) => dir + f.path), ids);
+      if (off) return;
+      members = { key, m };
+      filterStatus = "";
+    })().catch((e) => !off && (filterStatus = `the places' hexagons could not be loaded (${errorLine(e)})`));
+    return () => (off = true);
+  });
+  const filterNote = $derived(
+    !st.filter
+      ? ""
+      : placeError
+        ? `the gazetteer could not be loaded: showing every hexagon`
+        : placeData && !filterLayer
+          ? `${st.filter.coll} is not in the gazetteer`
+          : filterLayer && !filterLayer.h3
+            ? "this collection has no hexagon membership (points and lines enclose no area): showing every hexagon"
+            : memberMan && !memberKey
+              ? "too wide a view for the places at this resolution: zoom in"
+              : filterStatus,
+  );
+  // the place filter (f=, 0.10.0): the loaded hexagons a chosen place covers (membership below); while
+  // the gazetteer or the membership is loading nothing is drawn rather than the unfiltered view
+  const partition = $derived.by((): Partition | null => {
+    if (!loaded || !st.filter) return loaded;
+    if (!placeApi || !placeData) return null;
+    if (!filterLayer?.h3) return loaded;
+    return members && members.key === memberKey ? placeApi.filterPartition(loaded, members.m) : null;
+  });
   const planBytes = $derived(plan ? plan.files.reduce((a, f) => a + f.bytes, 0) : 0);
+  // viewing places: one row and one colour per place of the filter ----
+  const placeView = $derived(st.view === "places" && !!st.filter && !!filterLayer?.h3);
+  const summary = $derived(
+    placeView && partition && placeApi && placeData && members && members.key === memberKey
+      ? {
+          rows: placeApi.placeSummary(partition, members.m, st.indicator),
+          names: new Map(placeData.rows.filter((r) => r.collection === st.filter!.coll).map((r) => [r.place_id, r.name])),
+          indicator: st.indicator,
+          res,
+        }
+      : null,
+  );
+  const placeFill = $derived(summary && placeApi ? placeApi.placeColors(summary.rows, st.indicator) : null);
+  $effect(() => {
+    handle?.setAreas(
+      st.filter && filterLayer
+        ? { collection: st.filter.coll, pmtiles: filterLayer.pmtiles, ids: st.filter.ids, fill: placeFill?.fill ?? null, opacity: st.opacity }
+        : null,
+    );
+  });
+  const filterProps = $derived({
+    filter: st.filter,
+    view: st.view,
+    summary,
+    filterStatus: filterNote,
+    onfilter: (f: AppState["filter"]) => {
+      st.filter = f;
+      if (!f) st.view = "hex";
+    },
+    onview: (v: AppState["view"]) => (st.view = v),
+  });
   const vstats = $derived(partition ? viewStats(partition.values[st.indicator]) : null);
-  const domain = $derived(chooseDomain(st.domain, domainFromStats(releaseStats), vstats));
+  const domain = $derived(placeView ? (placeFill?.domain ?? null) : chooseDomain(st.domain, domainFromStats(releaseStats), vstats));
   const colors = $derived(partition ? cellColors(partition.values[st.indicator], domain) : null);
   const sqlText = $derived(
     live
@@ -256,7 +401,7 @@
   $effect(() => {
     const key = loadKey;
     if (!key) {
-      partition = null;
+      loaded = null;
       return;
     }
     const [mode, ...list] = key.split("\n");
@@ -274,7 +419,7 @@
         .then((v) => {
           if (cancelled) return;
           aphiaView = v;
-          partition = v.partition;
+          loaded = v.partition;
           loading = false;
         })
         .catch((err) => {
@@ -282,7 +427,7 @@
           loading = false;
           loadError = errorLine(err);
           aphiaView = null;
-          partition = null;
+          loaded = null;
         });
       return () => {
         cancelled = true;
@@ -298,7 +443,7 @@
     job
       .then((p) => {
         if (cancelled) return;
-        partition = p;
+        loaded = p;
         loading = false;
       })
       .catch((err) => {
@@ -371,7 +516,7 @@
   $effect(() => {
     if (!handle) return;
     handle.setLayers(
-      partition && colors ? [hexLayer(partition, st.indicator, colors, st.opacity)] : [],
+      partition && colors && !placeView ? [hexLayer(partition, st.indicator, colors, st.opacity)] : [],
     );
   });
   $effect(() => {
@@ -383,44 +528,6 @@
   });
   $effect(() => {
     handle?.setLabels(st.labels);
-  });
-  // the gazetteer (manifest + index): the picker, its search and the index reader are a lazy chunk,
-  // fetched the first time the Place panel opens or at once when a link carries pl=; the outline, its
-  // credit and the picker's selection come from it
-  let placeApi = $state.raw<typeof import("./lib/places/index") | null>(null);
-  let PlacePanelC = $state.raw<Component<any> | null>(null);
-  let placeData = $state.raw<PlaceData | null>(null);
-  let placeError = $state("");
-  let placeBusy = false;
-  function needPlaces() {
-    if (placeData || placeBusy) return;
-    placeBusy = true;
-    Promise.all([import("./lib/places/index"), import("./components/PlacePanel.svelte")])
-      .then(async ([api, panel]) => {
-        placeApi = api;
-        PlacePanelC = panel.default;
-        placeData = await api.ensurePlaces(engine);
-        placeError = "";
-      })
-      .catch((e) => (placeError = e instanceof Error ? e.message : String(e)))
-      .finally(() => (placeBusy = false));
-  }
-  $effect(() => {
-    if (st.place || st.tab === "place") untrack(needPlaces);
-  });
-  const placeRow = $derived(placeApi && placeData && st.place ? placeApi.resolvePlace(st.place, placeData.rows, st.placeColl) : null);
-  const placeTarget = $derived(
-    placeApi && placeData && placeRow
-      ? {
-          collection: placeRow.collection,
-          place_id: placeRow.place_id,
-          pmtiles: placeData.layers.find((l) => l.slug === placeRow.collection)?.pmtiles,
-          credit: placeApi.creditsFor(placeRow.collection, placeData.layers, [OBIS_CREDIT]),
-        }
-      : null,
-  );
-  $effect(() => {
-    handle?.setPlace(placeTarget);
   });
   // keep the map's centre (and the globe) in the part of the map the panes leave open: above the Time
   // strip and beside the Controls (laptop and wider; on a phone the panes are sheets) ----
@@ -483,6 +590,11 @@
       parts: !live && plan?.split ? { loaded: plan.files.length, total: plan.parentsTotal } : null,
       res,
       indicator: st.indicator,
+      within:
+        st.filter && placeData
+          ? withinPart(st.filter, filterLayer?.title ?? st.filter.coll, (id) => placeData!.rows.find((r) => r.collection === st.filter!.coll && r.place_id === id)?.name ?? id)
+          : null,
+      perPlace: placeView,
     }),
   );
   const titleText = $derived(sentenceText(parts));
@@ -494,6 +606,7 @@
   const message = $derived(
     loadError ||
       noDataReason ||
+      (loaded && !partition ? filterNote : "") ||
       (live ? aphiaView?.notice : plan?.notice) ||
       (live && h3tHealth === "probing" ? "Checking the WoRMS subtree service…" : "") ||
       (!live && health === "probing" ? "Loading release…" : ""),
@@ -902,7 +1015,7 @@
       {/snippet}
       {#snippet place(close)}
         <PlaceGate panel={PlacePanelC} note={placeNote()} placeId={st.place} placeColl={st.placeColl} data={placeData} error={placeError} onneed={needPlaces}
-          maxHeight="12rem" onsea={(r) => { goTo(r); close(); }} onplace={(r) => { goPlace(r); close(); }} />
+          {...filterProps} maxHeight="12rem" onsea={(r) => { goTo(r); close(); }} onplace={(r) => { goPlace(r); close(); }} />
       {/snippet}
       {#snippet scale()}
         <ScalePanel bind:st autoRes={autoResNow} {res} {resMax} />
@@ -914,7 +1027,7 @@
         {#if domain}
           <div class="legend">
             <Legend colors={gradient} {domain} format={(v: number) => fmt(v)}
-              title={`${parts.indicator.label} · ${st.domain === "release" && releaseStats && !live ? "release" : "view"} p02–p98`} />
+              title={placeView ? `${parts.indicator.label} · ${st.indicator === "n" ? "per place, area-weighted" : "per place, mean of the hexagons"}` : `${parts.indicator.label} · ${st.domain === "release" && releaseStats && !live ? "release" : "view"} p02–p98`} />
           </div>
         {/if}
         {#if coverage}<span class="coverage">{coverage}</span>{/if}
@@ -966,7 +1079,7 @@
         {:else if id === "place"}
           <div class="tab">
             <PlaceGate panel={PlacePanelC} note={placeNote()} placeId={st.place} placeColl={st.placeColl} data={placeData} error={placeError} onneed={needPlaces}
-              maxHeight="9rem" onsea={goTo} onplace={goPlace} />
+              {...filterProps} maxHeight="9rem" onsea={goTo} onplace={goPlace} />
             <div>
               <span class="mbon-label">hexagon size</span>
               <ScalePanel bind:st autoRes={autoResNow} {res} {resMax} />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { controlTab, CONTROL_TABS, DEFAULT_STATE, formatHash, hashHas, parseHash, tabFor, TABS, type AppState } from "../src/lib/state/url";
+import { controlTab, CONTROL_TABS, DEFAULT_STATE, FILTER_MAX_IDS, formatFilter, formatHash, hashHas, parseFilter, parseHash, tabFor, TABS, type AppState } from "../src/lib/state/url";
 import { layerKey, layerLabel, manifestLayer, parseLayerKey } from "../src/lib/data/layers";
 
 describe("URL hash state", () => {
@@ -25,6 +25,8 @@ describe("URL hash state", () => {
       labels: false,
       place: "NMS:MBNMS",
       placeColl: null,
+      filter: { coll: "noaa_sanctuaries", ids: ["NMS:CINMS", "NMS:MBNMS"] },
+      view: "places",
     };
     expect(parseHash(formatHash(s))).toEqual(s);
   });
@@ -210,5 +212,45 @@ describe("Controls tabs (0.8.0): ① Metric (taxon | indicator), ② Place, ③ 
   it("old k= links still open the same view", () => {
     for (const k of ["indicator", "place", "share"]) expect(parseHash(`#k=${k}`).tab).toBe(k);
     expect(parseHash("#k=metric").tab).toBe("taxon"); // not a view: the default
+  });
+});
+
+describe("place filter f= and view v= (0.10.0)", () => {
+  it("a whole collection, one place, a set: each round-trips", () => {
+    for (const filter of [
+      { coll: "noaa_sanctuaries", ids: null },
+      { coll: "noaa_sanctuaries", ids: ["NMS:MBNMS"] },
+      { coll: "boem_wind_leases", ids: ["BOEM:OCS-P 0561", "BOEM:OCS-P 0562"] },
+    ]) {
+      const s: AppState = { ...DEFAULT_STATE, filter };
+      expect(parseHash(formatHash(s))).toEqual(s);
+    }
+  });
+
+  it("written after the layout keys, `|` and `,` and `:` literal, a space encoded; absent when unset", () => {
+    const h = formatHash({ ...DEFAULT_STATE, place: "NMS:MBNMS", filter: { coll: "boem_wind_leases", ids: ["BOEM:OCS-P 0562", "BOEM:OCS-P 0561"] }, view: "places" });
+    expect(h.endsWith("&pl=NMS:MBNMS&f=boem_wind_leases|BOEM:OCS-P%200561,BOEM:OCS-P%200562&v=places")).toBe(true);
+    expect(formatHash(DEFAULT_STATE)).not.toMatch(/&f=|&v=/);
+  });
+
+  it("a set has one spelling: ids sorted and deduplicated", () => {
+    expect(formatFilter({ coll: "c", ids: ["b", "a", "b"] })).toBe("c|a,b");
+    expect(parseFilter("c|b,a,a")).toEqual({ coll: "c", ids: ["a", "b"] });
+  });
+
+  it("an encoded `|` (%7C) parses the same", () => {
+    expect(parseHash("#f=noaa_sanctuaries%7CNMS:MBNMS").filter).toEqual({ coll: "noaa_sanctuaries", ids: ["NMS:MBNMS"] });
+  });
+
+  it("junk drops the whole filter, never part of it, and never throws", () => {
+    for (const bad of ["", "Bad-Slug", "c|", "c|a,", "c|a,b<", "c|a'b", `c|${Array.from({ length: FILTER_MAX_IDS + 1 }, (_, i) => `x${i}`).join(",")}`])
+      expect(parseFilter(bad)).toBeNull();
+    expect(parseHash("#f=c|a'b").filter).toBeNull();
+  });
+
+  it("v= is places or the default hexagons", () => {
+    expect(parseHash("#v=places").view).toBe("places");
+    expect(parseHash("#v=hex").view).toBe("hex");
+    expect(parseHash("#v=junk").view).toBe("hex");
   });
 });

@@ -35,6 +35,11 @@ Conventions for anyone (human or agent) changing obis-hex.
   `pl=` carries `pc=` when it is ambiguous. Read PMTiles from the bucket host (`pmtilesUrl()`), never
   `storage.oceanmetrics.io` (302 without CORS). `places/index.ts` and `PlacePanel.svelte` are a lazy chunk:
   the always-loaded code (`App.svelte`, `map.ts`) reaches them by `import()` or `places/urls.ts` only.
+- **Filter by membership, never by geometry.** The place filter (`f=`) and the places view (`v=places`) join
+  the loaded cells on `h3` with the gazetteer's place × H3 membership (`places/membership.ts`, lazy; the
+  layer's `h3` in `layers.json`); no polygon is read in the browser. A per-place value of ES(50), richness,
+  Shannon or Simpson is the area-weighted mean OF THE HEXAGONS and must be labelled so (table, CSV header,
+  legend, sentence); only records (n × share) add up. Place ids reach SQL only through `lit()`.
 - **The UI is `@marinebon/ui`** (pinned `github:marinebon/ui#v0.4.1`; read its AGENTS.md before adding a
   control). Use its components and semantic tokens (`--bg-surface`, `--text-body`, …), never a new hex
   value; the pipeline order is ① Metric (the dataset step: taxon and indicator, sub-tabs, since neither means anything
@@ -73,12 +78,12 @@ Conventions for anyone (human or agent) changing obis-hex.
 | path | what |
 |---|---|
 | `src/App.svelte` | the shell: `st` (AppState), derived view, loading effects, map wiring; Header, title sentence, Controls, Cell pane, Time strip, Footer |
-| `src/components/` | TitleSentence (chips), TaxonPanel, PeriodPicker, PlacePanel (lazy, behind PlaceGate), ScalePanel, IndicatorPanel, SharePanel, SqlPanel, CellPanel, DecadeBars, AphiaSearch |
+| `src/components/` | TitleSentence (chips), TaxonPanel, PeriodPicker, PlacePanel and PlaceFilter (lazy, behind PlaceGate), ScalePanel, IndicatorPanel, SharePanel, SqlPanel, CellPanel, DecadeBars, AphiaSearch |
 | `src/lib/view/sentence.ts` | the title sentence parts and text, hexagon areas, the coverage line |
 | `src/lib/data/taxa.ts` | the taxon picker rows (groups, counts, common names, log bars) |
 | `src/lib/release/decades.ts` | records per decade (sum of `n` of the res-1 decade files), brush ⇄ decade |
 | `src/lib/view/regions.ts` | the 13 "Seas & oceans" camera presets (no gazetteer feature) |
-| `src/lib/places/` | the gazetteer as the Place picker's source: `index.ts` (manifest, index read through the engine, search, picker groups, camera, credits; lazy), `urls.ts` (bucket URLs, `pmtilesUrl`, always loaded) |
+| `src/lib/places/` | the gazetteer as the Place picker's source: `index.ts` (manifest, index read through the engine, search, picker groups, camera, credits; lazy), `membership.ts` (place × H3 membership: files per view, `MemberCache`, `filterPartition`, `placeSummary`, `placeColors`, CSV; lazy, re-exported by `index.ts`), `urls.ts` (bucket URLs, `pmtilesUrl`, always loaded) |
 | `src/lib/export/` | the title-stamped PNG, the Cite this data text (release citation + OBIS line) |
 | `src/lib/help/` | tour stops and keys (`tour.ts`), `?tour=`/`?modal=` and the welcome views (`start.ts`), shortcuts (`keys.ts`), data sources (`sources.ts`) |
 | `src/lib/feedback/` | the GitHub issue URL and report text (`issue.ts`), mark-up drawing (`annotate.ts`) and colours (`colors.ts`), the endpoint (`endpoint.ts`), what Send and the notice do (`sendState.ts`), POST body (`payload.ts`) and client (`postFeedback.ts`), the lazy screenshot (`capture.ts`) |

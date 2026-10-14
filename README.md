@@ -66,7 +66,9 @@ the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-a
   The second line is the colour scale (viridis over p02–p98, the release's for the view or the loaded
   hexagons') and the count, which for ES(50) is the coverage caveat: "9,196 of 26,361 hexagons have
   ≥ 50 records". *Worldwide* means the whole layer is loaded (one file); *in view* means only the
-  parent partitions covering the map (or the live layer's bbox), and the count is for those.
+  parent partitions covering the map (or the live layer's bbox), and the count is for those. With a place
+  filter the place part reads "in Monterey Bay NMS" (or "in <collection> (every place)"), and viewing places
+  the hexagon part reads "per place" (see "Filter and summarize by place").
 - **Controls** (the left, the stage's full height, numbered; the Time strip starts to their right):
   ① **Metric**, the dataset step: a taxon and an indicator, which only mean something together (as an
   ERDDAP dataset and its variable), on two sub-tabs. *Taxon*: one picker, filling the pane, of All taxa, the 7 Essential Ocean
@@ -112,6 +114,8 @@ default and after the keys above (tested):
 | `b=0` | basemap labels off | on |
 | `pl` | the outlined gazetteer place: any id of the gazetteer index, percent-encoded (`NMS:MBNMS`, `GEBCO:1001`, `BOEM:OCS-A%200512`; letters, digits, `: _ - .` and spaces, 1-80 characters; 0.5.2, any id since 0.7.0) | none |
 | `pc` | the place's gazetteer collection (`boem_wind_leases`), written only when the id occurs in more than one collection; without it the first collection that has the id opens (0.7.0) | none |
+| `f` | the place filter (0.10.0): `f=<collection>` every place of a gazetteer collection, `f=<collection>\|<id>` one place, `f=<collection>\|<id>,<id>,…` a set (sorted, so one spelling; at most 500); `\|` and `,` are not in the id alphabet, so nothing is escaped. A malformed value drops the whole filter | none (everywhere) |
+| `v=places` | view as places: one colour and one table row per place of the filter (0.10.0) | hexagons |
 
 No key was renamed, so no alias is needed; with no `t=` the theme is `?theme=`, then the stored kit
 choice, then dark (the old default).
@@ -380,6 +384,47 @@ it gets its centroid and a zoom from its latitude span. A single point (a statio
 - **Known limits**: the 12 bboxes that still span -180..180 are placed by their centroid, which is only the
   average of the two halves of a split geometry.
 
+## Filter and summarize by place (0.10.0)
+
+The Place tab's **only hexagons in** (everywhere · this place · all of its collection) and **view as**
+(hexagons · places) follow CalCOFI explore's Area filter and Regions lens, on H3, with three roles kept
+apart: the outline (`pl=`) says where to look, the filter (`f=`) which hexagons count, the view (`v=`) how they
+are shown.
+
+- **Membership, not geometry.** The gazetteer publishes, per polygon collection, which H3 cells of res 1–7
+  each place covers and the share of each cell's area inside it (places repo, `scripts/build_h3_membership.py`;
+  layout in its README, "H3 membership"): `<collection>/h3/membership.json`, res 1–5 one file each, res 6–7
+  split by the same res-2 / res-3 parents as the release, and `h3/parents.parquet` (which parents hold each
+  place). `layers.json` advertises it as the row's `h3` only while it was built from the published
+  `places.parquet`; points and lines have none (the filter then says so and shows every hexagon). A cell is
+  listed when ≥ 1% of it is inside the place or it holds ≥ 1% of the place (Ben, 2026-10-14: "intersected and
+  area-weighted ... keep anything over 1%").
+- **Filtering** (`src/lib/places/membership.ts`, the lazy places chunk) reads the membership files the view
+  needs through the engine (`SELECT filename AS url, place_id, h3, share ... read_parquet([...], filename =
+  true)`, every value through `lit()`), each file once (`MemberCache`): the one file at res 1–5; at res 6–7 the
+  parent files in view (the data plan's own parents, else `coverCells()` of the view) and, for chosen places,
+  the parents that hold them. `filterPartition()` keeps the loaded cells a chosen place covers (a cell's share
+  over several places is their sum, capped at 1), so the ramp, view stats, coverage line and Cell pane all
+  follow. While the membership loads nothing is drawn rather than the unfiltered view; a view too wide for
+  the parents at res 6–7 says "zoom in". The filter's places are outlined thinly under the selected place's
+  outline (`setAreas()` on the outline map).
+- **Viewing places** (`v=places`): the hexagons are hidden and each place of the filter is filled with its
+  value on the outline map (`fill-color` a `match` on `place_id`, viridis over the places' own min–max), the
+  sentence reads "… in National Marine Sanctuaries (every place), per place (from ~253 km² hexagons,
+  area-weighted): ES(50) (mean of the hexagons)", and the Place tab lists one row per place (`placeSummary()`):
+  hexagons with data, **records = Σ n × share** (records add up, so this is the place's own, area-weighted),
+  and for the other indicators **the share-weighted mean of the hexagons' values**, sortable, with a CSV
+  (`summaryCsv()`). A row's box takes the place out of (or puts it back into) the filter's set; its name
+  outlines the place and fits the map.
+- **The science caveat.** ES(50), richness, Shannon and Simpson do not add up across hexagons: the mean of a
+  sanctuary's hexagon ES(50) values is not the sanctuary's ES(50). The table, its CSV header
+  (`es_mean_of_hexagons`), the legend and the sentence say so. A place's own indices need its species counts
+  pooled over its cells, which is the obisindicators per-place layer (pooled, area-weighted species counts per
+  place × layer × decade, built in the monthly refresh); until a release carries it, every per-place value
+  other than records is a statistic of the hexagons.
+- **At res 6–7** only the parent partitions in view are loaded, so a place larger than the view is
+  summarized over its loaded hexagons; zoom out (res 5 and coarser are whole files) for whole places.
+
 ## Legacy URLs
 
 `app.marinesensitivity.org/h3-db/?<bookmark>` is meant to 302 to
@@ -448,7 +493,7 @@ Measured at 0.3.0 (2026-10-08):
 
 | | gzip | budget |
 |---|---|---|
-| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) → 647.7 KB (0.6.0) → 647.7 KB (0.6.1) → 648.1 KB (0.7.0) → 648.3 KB (0.7.1, 651.1 KB measured in CI) | 660 KB (650 until 0.7.1) |
+| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) → 647.7 KB (0.6.0) → 647.7 KB (0.6.1) → 648.1 KB (0.7.0) → 648.3 KB (0.7.1, 651.1 KB measured in CI) → 649.8 KB (0.8.1) → 652.8 KB (0.10.0) | 660 KB (650 until 0.7.1) |
 | runtime worker (MapLibre's) | 140.2 KB | 150 KB |
 | fonts and images (the kit's nine woff2 faces and the MBON wordmark; 0.4.0) | 538.1 KB raw | 600 KB |
 | DuckDB-WASM (lazy: JS chunk 45 KB, wasm ~7.8 MB) | not counted | must stay lazy |
@@ -466,6 +511,15 @@ budget. 0.5.2 (the place outline) added 9.2 KB, almost all of it `pmtiles` and i
 forbidden marker in the static graph, like DuckDB's bundle names.
 
 ## Versions
+
+- **0.10.0** (2026-10-14): filter and summarize by gazetteer place. The Place tab adds **only hexagons in**
+  (everywhere · this place · all of its collection) and **view as** (hexagons · places); new URL keys `f=` (a
+  collection, one place or a set) and `v=places`. The filter keeps the hexagons a place covers, from the
+  gazetteer's new place × H3 membership (the share of each cell inside, ≥ 1%); viewing places fills each place
+  with its value and lists one row per place (hexagons, records summed area-weighted, the area-weighted mean of
+  the hexagons' values, labelled as such) with a CSV. The title sentence says "in <place>" for the filter and
+  "per place" for the view. See "Filter and summarize by place". Entry 652.8 KB gzip of 660 KB (+3.0 KB; the
+  membership code and the table are in the lazy places chunk).
 
 - **0.9.1** (2026-10-12): the footer dates the two sources, `OBIS 2026-10-11 · WoRMS 2026-10-01`: the OBIS data date (`obis_snapshot`, from obisindicators 0.7.3 the newest object in OBIS's `occurrence/`, not the day the refresh ran) and the WoRMS ChecklistBank version (`worms_version`). The data build date and the release id, which repeated the run date, are left to About, Data sources and Cite this data; those, and the citation, now say "OBIS data as of" and name the WoRMS version.
 - **0.9.0** (2026-10-12): `@marinebon/ui` 0.4.1. The WoRMS search row in the taxon picker is listed whatever is typed and says what it will search for ("Search all of WoRMS for “Cetacea”…"); choosing it opens the WoRMS search with the typed text (regression test in `tests/taxa.test.ts`). Families (`rank=family`, from obisindicators 0.7.2 releases) are a fourth taxon group, listed only while searching (at most 50, "keep typing" past that), except the family on the map; common names added for 18 families people look for (Delphinidae — dolphins, Cheloniidae — sea turtles, …). The README gained "How it runs" (the request diagram and the hosts) and points to obisindicators for the build pipeline diagram.

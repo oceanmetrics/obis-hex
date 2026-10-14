@@ -10,6 +10,8 @@ import { lit } from "../engine/sql";
 import { GAZETTEER_BASE, INDEX_LAYERS_URL, INDEX_URL, LAYERS_URL, OBIS_CREDIT, directBase, pmtilesUrl } from "./urls";
 
 export { GAZETTEER_BASE, INDEX_LAYERS_URL, INDEX_URL, LAYERS_URL, OBIS_CREDIT, directBase, pmtilesUrl };
+// the place filter and per-place view (0.10.0) load with this chunk
+export * from "./membership";
 
 /** one collection of the manifest */
 export interface PlaceLayer {
@@ -27,6 +29,9 @@ export interface PlaceLayer {
   license_url: string;
   citation: string;
   bbox: [number, number, number, number] | null;
+  /** the collection's place × H3 membership (`<slug>/h3/membership.json` on the bucket host), when
+   * the manifest advertises one built from the published places.parquet; null for points and lines */
+  h3: string | null;
 }
 
 /** one place of the index (no per-row attribution: it is the collection's, in the manifest) */
@@ -77,6 +82,7 @@ export function parseLayers(json: unknown): PlaceLayer[] {
     license_url: String(l.license_url ?? ""),
     citation: String(l.citation ?? ""),
     bbox: Array.isArray(l.bbox) && l.bbox.length === 4 ? (l.bbox as [number, number, number, number]) : null,
+    h3: typeof l.h3 === "string" && l.h3 ? `${base}${String(l.slug)}/h3/membership.json` : null,
   }));
 }
 
