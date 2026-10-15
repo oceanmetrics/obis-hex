@@ -71,6 +71,7 @@
   import type { TourStop } from "./lib/help/tour";
   import type { FeedbackKind } from "./lib/feedback/issue";
   import CellPanel, { type SelectedCell } from "./components/CellPanel.svelte";
+  import type { SpeciesState } from "./lib/cell/species";
   import TitleSentence from "./components/TitleSentence.svelte";
   import TaxonPanel from "./components/TaxonPanel.svelte";
   import PeriodPicker from "./components/PeriodPicker.svelte";
@@ -172,6 +173,9 @@
   let aphiaView = $state.raw<AphiaView | null>(null);
   let aphiaInfo = $state.raw<TaxonInfo | null>(null);
   let aphiaAccepted = $state.raw<TaxonInfo | null>(null);
+  // the selected hexagon's species (h3t cell endpoint) and the Cell pane expanded to list them all ----
+  let cellSpecies = $state.raw<SpeciesState>({ status: "idle" });
+  let cellMax = $state(false);
   let mapEl: HTMLDivElement;
   // the Controls pane's horizontal extent over the map (null when folded, a sheet or expanded) ----
   let mapW = $state(0);
@@ -707,6 +711,42 @@
     };
   });
 
+  // the selected cell's species, fetched while the Cell pane is open (one request per hexagon × layer ×
+  // decade × release; lib/cell/species.ts, a lazy chunk, caches recent ones). The list must add up to
+  // the cell's n and sp, else `totalsNote` says why. ----
+  const selH3 = $derived(selected?.h3 ?? null);
+  $effect(() => {
+    const h3 = selH3;
+    const layer = sel;
+    const decade = st.decade;
+    const rel = release?.release ?? null;
+    if (!h3 || !st.cellOpen || h3tHealth === "down") {
+      cellSpecies = { status: "idle" };
+      return;
+    }
+    const ctl = new AbortController();
+    cellSpecies = { status: "loading" };
+    import("./lib/cell/species")
+      .then(async (m) => {
+        try {
+          const url = m.cellSpeciesUrl(h3tBase, { h3, sel: layer, decade, release: rel });
+          const list = await m.loadCellSpecies(url, fetch, ctl.signal);
+          const cell = untrack(() => selected);
+          const note = cell?.h3 === h3 ? m.totalsNote(list, { n: cell.values.n, sp: cell.values.sp }, rel) : "";
+          if (!ctl.signal.aborted) cellSpecies = { status: "ok", list, note };
+        } catch (err) {
+          if (!ctl.signal.aborted) cellSpecies = { status: "error", message: m.speciesErrorLine(err) };
+        }
+      })
+      .catch((err) => {
+        if (!ctl.signal.aborted) cellSpecies = { status: "error", message: `Species list: ${String(err)}` };
+      });
+    return () => ctl.abort();
+  });
+  const speciesView = $derived<SpeciesState>(
+    selected && st.cellOpen && h3tHealth === "down" ? { status: "down" } : cellSpecies,
+  );
+
   // timing and bytes (the footer) ----
   const viewBytes = $derived(
     live ? (aphiaView?.meta.bytes ?? 0) : plan ? (plan.split ? planBytes : (fileRow?.bytes ?? 0)) : 0,
@@ -1133,10 +1173,12 @@
       {/snippet}
     </Controls>
 
-    <Pane title="cell" id="cell" class="cell-pane" anchor="top-right" offset={{ x: 0, y: 128 }} width={260}
+    <Pane title="cell" id="cell" class="cell-pane" anchor="top-right" offset={{ x: 0, y: 128 }} width={300}
       pillLabel={selected ? "cell ●" : "cell"}
-      bind:collapsed={() => !st.cellOpen, (v) => (st.cellOpen = !v)}>
-      <CellPanel cell={selected} indicator={st.indicator} p50={vstats ? vstats.p50 : null} />
+      bind:collapsed={() => !st.cellOpen, (v) => (st.cellOpen = !v)} bind:expanded={cellMax}>
+      <CellPanel cell={selected} indicator={st.indicator} p50={vstats ? vstats.p50 : null}
+        species={speciesView} layerKey={st.layer} decade={st.decade} release={release?.release ?? null}
+        expanded={cellMax} onexpand={(v) => (cellMax = v)} />
     </Pane>
 
     {#if welcomeOpen}
