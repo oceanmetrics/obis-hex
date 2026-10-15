@@ -92,7 +92,8 @@ the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-a
   decade files, one query per layer after the map has loaded, ~90–150 KB once); brushing a decade
   selects it, a click returns to all years. Decades exist for all taxa and the EOVs at res ≤ 5, and
   at any res for a WoRMS taxon; taxon groups say so instead.
-- **Cell** (right edge): a pill that lights when a hexagon is clicked; open it for all five indicators
+- **Cell** (right edge): a pill that lights when a hexagon is clicked (the hexagon is outlined in pink, 6 px,
+  until another is clicked or the map is clicked off the cells); open it for all five indicators
   and the species recorded there (the top 10 with records and first–last year; expand the pane for all
   of them, a filter, sorting and a CSV; see "Species in a hexagon"). Hovering a hexagon shows the
   indicators too.
@@ -532,7 +533,7 @@ Measured at 0.3.0 (2026-10-08):
 
 | | gzip | budget |
 |---|---|---|
-| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) → 647.7 KB (0.6.0) → 647.7 KB (0.6.1) → 648.1 KB (0.7.0) → 648.3 KB (0.7.1, 651.1 KB measured in CI) → 649.8 KB (0.8.1) → 652.8 KB (0.10.0) → 653.6 KB (0.11.0) | 660 KB (650 until 0.7.1) |
+| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) → 647.7 KB (0.6.0) → 647.7 KB (0.6.1) → 648.1 KB (0.7.0) → 648.3 KB (0.7.1, 651.1 KB measured in CI) → 649.8 KB (0.8.1) → 652.8 KB (0.10.0) → 653.6 KB (0.11.0) → 653.7 KB (0.11.2) | 660 KB (650 until 0.7.1) |
 | runtime worker (MapLibre's) | 140.2 KB | 150 KB |
 | fonts and images (the kit's nine woff2 faces and the MBON wordmark; 0.4.0) | 538.1 KB raw | 600 KB |
 | DuckDB-WASM (lazy: JS chunk 45 KB, wasm ~7.8 MB) | not counted | must stay lazy |
@@ -551,6 +552,11 @@ budget. 0.5.2 (the place outline) added 9.2 KB, almost all of it `pmtiles` and i
 forbidden marker in the static graph, like DuckDB's bundle names. 0.11.0 (the species in a hexagon) added 0.8 KB to the entry; static, it was 4.1 KB, so the list, its table and its fetch are a lazy chunk.
 
 ## Versions
+
+- **0.11.2** (2026-10-15): the selected hexagon is outlined in bright pink (6 px; the feedback marks' `#ff2d95`,
+  which no viridis cell has), so the hexagon the Cell pane and its species list describe is plain on the map.
+  The outline is its own unpickable layer above the cells (`selectedLayer()`, `src/lib/map/hexLayer.ts`), so
+  hover and clicks still reach the cell beneath; it follows `x=`, so a shared link and the PNG show it too.
 
 - **0.11.1** (2026-10-15): startup timeouts count only time the page was free to read the answer
   (`patientTimeout()`, `src/lib/timer.ts`), for `latest.json` (3 s), `release.json` (10 s) and the h3t health

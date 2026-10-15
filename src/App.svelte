@@ -31,7 +31,7 @@
   import { effectiveRes, zoomToRes } from "./lib/state/resolution";
   import { chooseDomain, domainFromStats, viewStats } from "./lib/color/ramp";
   import { createMap, type MapHandle } from "./lib/map/map";
-  import { cellColors, hexLayer } from "./lib/map/hexLayer";
+  import { cellColors, hexLayer, selectedLayer } from "./lib/map/hexLayer";
   import { fmt, fmtBytes } from "./lib/format";
   import {
     errorLine,
@@ -520,7 +520,9 @@
   $effect(() => {
     if (!handle) return;
     handle.setLayers(
-      partition && colors && !placeView ? [hexLayer(partition, st.indicator, colors, st.opacity)] : [],
+      partition && colors && !placeView
+        ? [hexLayer(partition, st.indicator, colors, st.opacity), ...(selected ? [selectedLayer(selected.h3)] : [])]
+        : [],
     );
   });
   $effect(() => {
