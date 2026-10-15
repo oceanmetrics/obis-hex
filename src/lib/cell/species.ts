@@ -41,8 +41,7 @@ export type SpeciesState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "ok"; list: CellSpeciesList; note: string }
-  | { status: "error"; message: string }
-  | { status: "down" };
+  | { status: "error"; message: string };
 
 /** rows in the pane before it is expanded */
 export const TOP_SPECIES = 10;
