@@ -8,6 +8,11 @@ import { rampColor, type Domain } from "../color/ramp";
 
 export const NULL_COLOR: [number, number, number, number] = [0, 0, 0, 0];
 
+/** the selected hexagon's outline: the feedback marks' pink (#ff2d95, `feedback/colors.ts`), which no viridis
+ * cell has and which stays visible on both basemaps */
+export const SELECTED_COLOR: [number, number, number, number] = [255, 45, 149, 255];
+export const SELECTED_WIDTH_PX = 6;
+
 /** per-cell RGBA, computed once per (partition, indicator, domain) so a pan never recolours. */
 export function cellColors(values: Float64Array, domain: Domain | null): Uint8ClampedArray {
   const out = new Uint8ClampedArray(values.length * 4);
@@ -43,5 +48,24 @@ export function hexLayer(p: Partition, indicator: Indicator, colors: Uint8Clampe
     highPrecision: "auto",
     opacity,
     updateTriggers: { getFillColor: [p.url, indicator, colors] },
+  });
+}
+
+/** The selected hexagon (URL `x=`, the Cell pane's cell) outlined above the others. Not pickable, so hover and
+ * clicks still reach the cell beneath; an exact polygon (one cell, so `highPrecision` costs nothing). */
+export function selectedLayer(h3: string) {
+  return new H3HexagonLayer<string>({
+    id: "hex-selected",
+    data: [h3],
+    getHexagon: (d: string) => d,
+    filled: false,
+    stroked: true,
+    extruded: false,
+    getLineColor: SELECTED_COLOR,
+    getLineWidth: SELECTED_WIDTH_PX,
+    lineWidthUnits: "pixels",
+    lineJointRounded: true,
+    highPrecision: true,
+    pickable: false,
   });
 }
