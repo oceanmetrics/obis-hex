@@ -713,14 +713,15 @@
 
   // the selected cell's species, fetched while the Cell pane is open (one request per hexagon × layer ×
   // decade × release; lib/cell/species.ts, a lazy chunk, caches recent ones). The list must add up to
-  // the cell's n and sp, else `totalsNote` says why. ----
+  // the cell's n and sp, else `totalsNote` says why. Not gated on the h3t health probe: a request that
+  // fails says so itself, and a probe that timed out on a busy page would hide a working list. ----
   const selH3 = $derived(selected?.h3 ?? null);
   $effect(() => {
     const h3 = selH3;
     const layer = sel;
     const decade = st.decade;
     const rel = release?.release ?? null;
-    if (!h3 || !st.cellOpen || h3tHealth === "down") {
+    if (!h3 || !st.cellOpen) {
       cellSpecies = { status: "idle" };
       return;
     }
@@ -743,9 +744,6 @@
       });
     return () => ctl.abort();
   });
-  const speciesView = $derived<SpeciesState>(
-    selected && st.cellOpen && h3tHealth === "down" ? { status: "down" } : cellSpecies,
-  );
 
   // timing and bytes (the footer) ----
   const viewBytes = $derived(
@@ -1177,7 +1175,7 @@
       pillLabel={selected ? "cell ●" : "cell"}
       bind:collapsed={() => !st.cellOpen, (v) => (st.cellOpen = !v)} bind:expanded={cellMax}>
       <CellPanel cell={selected} indicator={st.indicator} p50={vstats ? vstats.p50 : null}
-        species={speciesView} layerKey={st.layer} decade={st.decade} release={release?.release ?? null}
+        species={cellSpecies} layerKey={st.layer} decade={st.decade} release={release?.release ?? null}
         expanded={cellMax} onexpand={(v) => (cellMax = v)} />
     </Pane>
 

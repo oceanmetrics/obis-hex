@@ -235,7 +235,7 @@ is the pointer, written by the monthly refresh (erddap-places `obis-h3.yml`, obi
 `{"release":"vYYYYMMDD","base":"https://s3.us-east-1.amazonaws.com/oceanmetrics.io-public/obis-h3/vYYYYMMDD/","obis_snapshot":"YYYY-MM-DD","built_at":"…"}`.
 At startup `resolveDataBase()` (`src/lib/release/release.ts`, async) takes, in order: `?data=`,
 `VITE_DATA_BASE` (both synchronous), the `base` of `latest.json` (fetched with `cache: "no-cache"`
-and a 3 s timeout; it must be an https URL without credentials), and finally the constant
+and a 3 s timeout, counted while the page is free since 0.11.1; it must be an https URL without credentials), and finally the constant
 `PUBLIC_DATA_BASE` (`v20260728`). Any failure of the fetch (404, network error, timeout, bad JSON)
 falls back to the constant, so the app never waits on, or breaks because of, the pointer. **A new
 release therefore needs no redeploy**: the monthly job writes the new `vYYYYMMDD/` folder, then
@@ -551,6 +551,15 @@ budget. 0.5.2 (the place outline) added 9.2 KB, almost all of it `pmtiles` and i
 forbidden marker in the static graph, like DuckDB's bundle names. 0.11.0 (the species in a hexagon) added 0.8 KB to the entry; static, it was 4.1 KB, so the list, its table and its fetch are a lazy chunk.
 
 ## Versions
+
+- **0.11.1** (2026-10-15): startup timeouts count only time the page was free to read the answer
+  (`patientTimeout()`, `src/lib/timer.ts`), for `latest.json` (3 s), `release.json` (10 s) and the h3t health
+  probe (8 s). A timer that fires late, because a long task held the page (MapLibre and deck.gl building the
+  map; seconds on a slow device or with software WebGL), re-arms for 200 ms instead of aborting, so a response
+  already waiting in the queue is read. Found taking the 0.11.0 screenshots in headless Chromium: `latest.json`
+  answered in 0.36 s, the page was busy for 17.6 s, the 3 s timer won, and the app read the fallback release
+  (v20260728, not v20261012) and saw the h3t service as down, which hid the species list. The species request
+  no longer waits on the health probe at all: a failed request says so itself.
 
 - **0.11.0** (2026-10-15): the species in a hexagon ([#5](https://github.com/oceanmetrics/obis-hex/issues/5)).
   The Cell pane lists the species behind the selected hexagon's records, from the h3t service's new cell

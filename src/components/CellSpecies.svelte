@@ -76,9 +76,9 @@
 
   {#if species.status === "loading"}
     <p class="dim">Loading species…</p>
-  {:else if species.status === "error" || species.status === "down"}
+  {:else if species.status === "error"}
     <Notice kind="warn">
-      {species.status === "down" ? "The species service is not answering." : species.message}
+      {species.message}
       <a href={obisChecklistUrl(h3, decade)} target="_blank" rel="noopener">OBIS checklist for this hexagon</a>
       (live OBIS, so its counts differ)
     </Notice>

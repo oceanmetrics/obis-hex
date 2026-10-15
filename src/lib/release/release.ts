@@ -4,6 +4,7 @@ import type { Engine } from "../engine/engine";
 import { lit } from "../engine/sql";
 import { statsKey, type Indicator, type LayerSel } from "../data/layers";
 import { Manifest, type FileRow } from "./manifest";
+import { patientTimeout } from "../timer";
 
 /** the fallback release (path-style S3 URL: the bucket answers CORS with Range this way), used when
  * latest.json cannot be read. The monthly refresh moves `latest.json`, not this constant. */
@@ -70,13 +71,14 @@ export async function fetchLatestBase(
 ): Promise<string | null> {
   const f = opts.fetchImpl ?? fetch.bind(globalThis);
   const ctl = new AbortController();
-  // the abort rejects a fetch that honours the signal; the race covers one that does not
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  // the abort rejects a fetch that honours the signal; the race covers one that does not. The timer
+  // counts only time the page was free to read the answer (patientTimeout, 0.11.1).
+  let cancel: (() => void) | undefined;
   const timeout = new Promise<null>((res) => {
-    timer = setTimeout(() => {
+    cancel = patientTimeout(opts.timeoutMs ?? 3000, () => {
       ctl.abort();
       res(null);
-    }, opts.timeoutMs ?? 3000);
+    });
   });
   const read = (async () => {
     const res = await f(opts.url ?? LATEST_URL, { signal: ctl.signal, cache: "no-cache" });
@@ -87,14 +89,14 @@ export async function fetchLatestBase(
   try {
     return await Promise.race([read, timeout]);
   } finally {
-    clearTimeout(timer);
+    cancel?.();
   }
 }
 
 /**
  * The data base URL, normalized to end in "/": `?data=` → `VITE_DATA_BASE` (both via
  * {@link dataBaseOverride}) → the `base` in latest.json (fetched with `cache: "no-cache"` and a 3 s
- * timeout) → {@link PUBLIC_DATA_BASE}. A new monthly release therefore needs no redeploy; any
+ * timeout, counted while the page is free: {@link patientTimeout}) → {@link PUBLIC_DATA_BASE}. A new monthly release therefore needs no redeploy; any
  * failure to read latest.json falls back to the constant.
  */
 export async function resolveDataBase(
@@ -114,7 +116,7 @@ export async function probeRelease(
 ): Promise<{ ok: true; release: ReleaseJson } | { ok: false; error: string }> {
   const f = opts.fetchImpl ?? fetch.bind(globalThis);
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), opts.timeoutMs ?? 10_000);
+  const cancel = patientTimeout(opts.timeoutMs ?? 10_000, () => ctl.abort());
   try {
     const res = await f(`${base}release.json`, { signal: ctl.signal, cache: "no-cache" });
     if (!res.ok) return { ok: false, error: `release.json: HTTP ${res.status}` };
@@ -125,7 +127,7 @@ export async function probeRelease(
   } catch (err) {
     return { ok: false, error: `release.json: ${err instanceof Error ? err.message : String(err)}` };
   } finally {
-    clearTimeout(timer);
+    cancel();
   }
 }
 

@@ -6,7 +6,7 @@
 //     store's n and sp for that EOV and decade
 import { readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { H3tError, type FetchLike } from "../src/lib/aphia/h3t";
 import {
   cellSpeciesUrl,
@@ -23,6 +23,7 @@ import {
   yearsText,
   type CellSpeciesList,
 } from "../src/lib/cell/species";
+import { LATE_MS, patientTimeout } from "../src/lib/timer";
 
 const FIX = resolve(__dirname, "fixtures/h3t");
 const ALL = JSON.parse(readFileSync(`${FIX}/cell_872834c65ffffff.json`, "utf8"));
@@ -212,5 +213,56 @@ describe("the species list stays lazy", () => {
     }
     expect(readFileSync(join(src, "components/CellPanel.svelte"), "utf8")).toContain('import("./CellSpecies.svelte")');
     expect(readFileSync(join(src, "App.svelte"), "utf8")).toContain('import("./lib/cell/species")');
+  });
+});
+
+describe("patientTimeout (0.11.1)", () => {
+  // regression: headless Chromium was busy for 17 s while building the map; the 3 s timer for
+  // latest.json (answered in 0.36 s) fired late and won, so the app read the fallback release and
+  // saw the h3t health probe as down, which hid the species list
+  it("gives up when its timer fires on time", async () => {
+    vi.useFakeTimers();
+    try {
+      let clock = 0;
+      const fired: number[] = [];
+      patientTimeout(100, () => fired.push(clock), () => clock);
+      clock = 100;
+      vi.advanceTimersByTime(100);
+      expect(fired).toEqual([100]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("re-arms when it fires late (a busy page), so a response already queued is read first", async () => {
+    vi.useFakeTimers();
+    try {
+      let clock = 0;
+      const fired: number[] = [];
+      const cancel = patientTimeout(3000, () => fired.push(clock), () => clock);
+      clock = 10_000; // a long task held the page past the deadline
+      vi.advanceTimersByTime(3000);
+      expect(fired).toEqual([]); // late: re-armed, not timed out
+      cancel(); // the queued response arrives and cancels
+      clock += LATE_MS;
+      vi.advanceTimersByTime(LATE_MS);
+      expect(fired).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("still times out once the page is free and nothing came", async () => {
+    vi.useFakeTimers();
+    try {
+      let clock = 0;
+      const fired: number[] = [];
+      patientTimeout(3000, () => fired.push(clock), () => clock);
+      clock = 10_000;
+      vi.advanceTimersByTime(3000);
+      clock += LATE_MS;
+      vi.advanceTimersByTime(LATE_MS);
+      expect(fired).toEqual([10_000 + LATE_MS]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

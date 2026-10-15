@@ -11,6 +11,7 @@
 //   GET <base>health                             liveness
 import type { Bounds } from "../view/viewport";
 import type { Engine, Partition } from "../engine/engine";
+import { patientTimeout } from "../timer";
 
 /** the Varnish cache in front of h3t.marinesensitivity.org (the service README's advice for
  * this app); override with `?h3t=https://…/h3t/` or VITE_H3T_BASE. Ends in "/". */
@@ -228,10 +229,10 @@ export async function fetchSubtree(
 }
 
 /** is the service up? `/health` with a cache-busting parameter (so the Varnish cache cannot
- * answer for a dead origin), 8 s timeout. */
+ * answer for a dead origin), 8 s timeout counted while the page is free (patientTimeout). */
 export async function probeH3t(base: string, fetchFn: FetchLike = fetch, timeoutMs = 8000): Promise<boolean> {
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), timeoutMs);
+  const cancel = patientTimeout(timeoutMs, () => ctl.abort());
   try {
     const res = await fetchFn(`${base}health?t=${Date.now()}`, { signal: ctl.signal });
     if (!res.ok) return false;
@@ -240,7 +241,7 @@ export async function probeH3t(base: string, fetchFn: FetchLike = fetch, timeout
   } catch {
     return false;
   } finally {
-    clearTimeout(timer);
+    cancel();
   }
 }
 
