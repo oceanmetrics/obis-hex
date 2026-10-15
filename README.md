@@ -12,9 +12,9 @@ builds each cell from its H3 index.
 ## How it runs
 
 "Serverless" here means no server of ours computes a map for the precomputed layers: GitHub Pages
-serves the app, an S3 bucket serves the Parquet, and the browser does the rest. One layer is the
-exception: **Any taxon (WoRMS)** (`aphia:<id>`) is computed on request by the h3t subtree service on
-the msens VM, behind a Varnish cache. The data is built monthly on that VM too (obisindicators
+serves the app, an S3 bucket serves the Parquet, and the browser does the rest. Two things are the
+exception, both computed on request by the h3t service on the msens VM, behind a Varnish cache: the
+**Any taxon (WoRMS)** layer (`aphia:<id>`) and the **species in a hexagon** listed in the Cell pane. The data is built monthly on that VM too (obisindicators
 `refresh_obis_h3.sh`, scheduled from erddap-places; the build pipeline and its diagram are in
 obisindicators [`data-raw/README.md`](https://github.com/marinebon/obisindicators/blob/main/data-raw/README.md#monthly-obis-h3-refresh-refresh_obis_h3sh)).
 
@@ -42,6 +42,10 @@ sequenceDiagram
     B->>H: taxon?q=, subtree?aphiaid=&res=[&decade=][&bbox=]
     H-->>B: Parquet (Varnish keeps it 7 days) → DuckDB-WASM part_cache
   end
+  opt Cell pane open on a hexagon
+    B->>H: cell?h3=[&aphiaid=|&eov=|&rank=&taxon=][&decade=]&release=
+    H-->>B: JSON species list (records, first/last year), Varnish 7 days
+  end
 ```
 
 | host | what | ours? |
@@ -49,7 +53,7 @@ sequenceDiagram
 | GitHub Pages | the built app (`dist/`), DuckDB-WASM self-hosted (no CDN) | static |
 | S3 `oceanmetrics.io-public` | `obis-h3/` release (Parquet), `gazetteer/` (places index, PMTiles); CORS `*` | static |
 | CARTO | basemap style and tiles | third party |
-| `h3tcache.marinesensitivity.org` | Varnish → h3t (FastAPI + read-only DuckDB over the OBIS H3 store) on msens; only for `aphia:<id>` | **server** |
+| `h3tcache.marinesensitivity.org` | Varnish → h3t (FastAPI + read-only DuckDB over the OBIS H3 store) on msens; only for `aphia:<id>` and the Cell pane's species list | **server** |
 | Google Apps Script | feedback Send (Sheet, mail, GitHub issue), only when configured | third party |
 
 ## What it shows
@@ -88,8 +92,10 @@ the page, and everything else follows the calcofi.io/explore anatomy (`docs/ui-a
   decade files, one query per layer after the map has loaded, ~90–150 KB once); brushing a decade
   selects it, a click returns to all years. Decades exist for all taxa and the EOVs at res ≤ 5, and
   at any res for a WoRMS taxon; taxon groups say so instead.
-- **Cell** (right edge): a pill that lights when a hexagon is clicked; open it for all five indicators.
-  Hovering a hexagon shows them too.
+- **Cell** (right edge): a pill that lights when a hexagon is clicked; open it for all five indicators
+  and the species recorded there (the top 10 with records and first–last year; expand the pane for all
+  of them, a filter, sorting and a CSV; see "Species in a hexagon"). Hovering a hexagon shows the
+  indicators too.
 - **Footer** (kit): built by Ocean Metrics · OBIS data date · WoRMS version · resolution · version · bytes · ms · source (the release id and the data build date are in About and Cite this data).
 - **Phone**: the panes become bottom sheets (Controls folded at first), the footer wraps.
 - The URL hash holds the whole view, so any link reproduces it (see "URL" below). Old links to the
@@ -425,6 +431,39 @@ are shown.
 - **At res 6–7** only the parent partitions in view are loaded, so a place larger than the view is
   summarized over its loaded hexagons; zoom out (res 5 and coarser are whole files) for whole places.
 
+## Species in a hexagon (0.11.0)
+
+Which species make up a hexagon's records and richness ([#5](https://github.com/oceanmetrics/obis-hex/issues/5)).
+Opening the Cell pane on a selected hexagon asks the h3t service's cell endpoint (MarineSensitivity/server
+`h3t/app/cell.py`; its README, "Cell endpoint") for the species in that cell, filtered as the map is:
+
+`GET https://h3tcache.marinesensitivity.org/h3t/cell?h3=<hex>[&aphiaid=<id> | &eov=<eov> | &rank=<rank>&taxon=<name>][&decade=<yyy0>]&release=<release id>`
+
+- **Same numbers as the hexagon.** The endpoint reads the store the release is exported from (`occ_h3`, which
+  keeps only records with a species), with each layer's own filter: none for all taxa, the store's `eov` table
+  for an EOV, the rank column for a taxon group, the WoRMS subtree for `aphia:<id>`, `date_year` for a decade.
+  So the list sums to the cell's records (`n`) and counts its richness (`sp`). Checked on the global store
+  (`obis_h3_global_v20260728`) for the 5 busiest cells of every layer and resolution
+  (`h3t/tests/test_cell_store.py`): every list equal. If the service runs another release than the one the
+  map reads (the store swap on the VM is a separate step from publishing `latest.json`), the totals can differ
+  and the pane says which release each is from (`totalsNote()`).
+- **What a row holds.** The species (its WoRMS species-rank AphiaID, linked to marinespecies.org), class and
+  family, records, share of the hexagon's records, and the first and last **year** with a record (the store
+  keeps years, not dates; "—" when none of a species' records has a year). Most records first.
+- **In the pane.** A line "54 species · 4,885 records", the top 10, and "All 54 species ▸", which expands the
+  pane over the map: a filter (every word must match the name, class, family, order or phylum), sorting by
+  any column, the first 500 rows (the CSV has all), and **CSV**
+  (`obis-hex_species_<h3>_<layer>_<period>_<release>.csv`). Esc restores the pane.
+- **Requests.** Only while the Cell pane is open on a hexagon (the hexagon is already in the URL, `x=` and
+  `xo=1`, so a link opens the same list). Parameters in a fixed order, `release=` last so each release gets
+  fresh cache entries; the module keeps the last 32 lists. The map never waits on it. When the service is
+  down or the request fails, one line says so and links the OBIS API checklist for the hexagon's polygon
+  (live OBIS, so its counts differ from the release's). Code: `src/lib/cell/species.ts` and
+  `src/components/CellSpecies.svelte`, a lazy chunk loaded on first use (3.3 + 2.0 KB gzip, not in the entry).
+- **Timings** (the endpoint on the Mac mini, global store): 11–42 ms per cell for the release layers, ~165 ms
+  for an AphiaID (the taxon tree walk). The largest list, a res-1 cell in the North Sea (`81197ffffffffff`),
+  is 8,814 species, 1.76 MB of JSON, 252 KB gzipped.
+
 ## Legacy URLs
 
 `app.marinesensitivity.org/h3-db/?<bookmark>` is meant to 302 to
@@ -493,11 +532,12 @@ Measured at 0.3.0 (2026-10-08):
 
 | | gzip | budget |
 |---|---|---|
-| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) → 647.7 KB (0.6.0) → 647.7 KB (0.6.1) → 648.1 KB (0.7.0) → 648.3 KB (0.7.1, 651.1 KB measured in CI) → 649.8 KB (0.8.1) → 652.8 KB (0.10.0) | 660 KB (650 until 0.7.1) |
+| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) → 647.7 KB (0.6.0) → 647.7 KB (0.6.1) → 648.1 KB (0.7.0) → 648.3 KB (0.7.1, 651.1 KB measured in CI) → 649.8 KB (0.8.1) → 652.8 KB (0.10.0) → 653.6 KB (0.11.0) | 660 KB (650 until 0.7.1) |
 | runtime worker (MapLibre's) | 140.2 KB | 150 KB |
 | fonts and images (the kit's nine woff2 faces and the MBON wordmark; 0.4.0) | 538.1 KB raw | 600 KB |
 | DuckDB-WASM (lazy: JS chunk 45 KB, wasm ~7.8 MB) | not counted | must stay lazy |
 | feedback dialog (with the 0.6.0 endpoint, payload and colour code) + html-to-image (lazy, 0.5.0) | 4.9 KB (5.3 KB at 0.6.0, before Copy report and Download PNG went) + 5.3 KB, not counted | must stay lazy |
+| the Cell pane's species list (`CellSpecies` + `lib/cell/species`, lazy, 0.11.0) | 3.3 KB + 2.0 KB, not counted | stays lazy (`tests/species.test.ts`) |
 
 The atlas budget is 450 KB; deck.gl and h3-js add roughly 300 KB, hence 650 KB here, raised to 660 KB at 0.7.2 because GitHub Actions' gzip measures the entry about 3 KB larger than a local build (651.1 vs 648.3 KB at 0.7.1) and the gazetteer picker had left under 2 KB of headroom; the next real growth should come out of the entry, not the budget. The viewport
 code (`polygonToCells`, `gridDisk`) uses the h3-js already in the bundle for deck.gl, so 0.2.0 (viewport loading,
@@ -508,9 +548,16 @@ static graph as assets; they are already compressed, never parsed as script and 
 use, so they got their own 600 KB budget (`FONT_IMAGE_BUDGET_BYTES`) instead of a raise of the code
 budget. 0.5.2 (the place outline) added 9.2 KB, almost all of it `pmtiles` and its `fflate`; 3.2 KB of headroom remained. 0.6.0 (the async `latest.json` resolver, the `@marinebon/ui` 0.3.0 bump; the feedback code is lazy) added 0.9 KB, leaving 2.3 KB; the budget is unchanged. 0.7.0 (the gazetteer picker) added 0.4 KB to the entry (leaving 1.9 KB): the picker, search and index reader are the lazy `PlacePanel` and `places` chunks (2.0 + 2.2 KB gzip, not counted), reached from `PlaceGate`; keeping them out of the entry saved the 1.4 KB that put it at 649.5 KB when they were static. 0.5.0 (welcome card, tour, Help modals, feedback bubble) added 6.3 KB; the feedback dialog and
 `html-to-image` are a dynamic `import()`, and `fontEmbedCSS` (an html-to-image identifier) is a
-forbidden marker in the static graph, like DuckDB's bundle names.
+forbidden marker in the static graph, like DuckDB's bundle names. 0.11.0 (the species in a hexagon) added 0.8 KB to the entry; static, it was 4.1 KB, so the list, its table and its fetch are a lazy chunk.
 
 ## Versions
+
+- **0.11.0** (2026-10-15): the species in a hexagon ([#5](https://github.com/oceanmetrics/obis-hex/issues/5)).
+  The Cell pane lists the species behind the selected hexagon's records, from the h3t service's new cell
+  endpoint: records and first–last year per species, the top 10 in the pane, all of them (filter, sort, CSV)
+  with the pane expanded. The list adds up to the hexagon's records and richness; a note says when the service
+  runs another release. When the service is down, the pane links the OBIS checklist instead. See "Species in a
+  hexagon". Entry 653.6 KB gzip of 660 KB (+0.8 KB; the list and its table are a lazy chunk, 5.3 KB gzip).
 
 - **0.10.1** (2026-10-14): the gazetteer manifest (`layers.json`) and each `membership.json` are fetched with
   `cache: "no-cache"`. The bucket sent them without `Cache-Control`, so a browser that had loaded the morning's

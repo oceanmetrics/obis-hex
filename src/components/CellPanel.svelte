@@ -10,7 +10,10 @@
 </script>
 
 <script lang="ts">
-  // the clicked hexagon's values, every indicator, with where it sits in the loaded hexagons.
+  // the clicked hexagon's values, every indicator, with where it sits in the loaded hexagons; then the
+  // species behind its records (CellSpecies, a lazy chunk loaded once the pane first has a list to show).
+  import type { Component } from "svelte";
+  import type { SpeciesState } from "../lib/cell/species";
   import { INDICATORS } from "../lib/data/layers";
   import { fmt } from "../lib/format";
   import { hexAreaLabel } from "../lib/view/sentence";
@@ -19,7 +22,29 @@
     cell,
     indicator,
     p50,
-  }: { cell: SelectedCell | null; indicator: Indicator; p50: number | null } = $props();
+    species = { status: "idle" },
+    layerKey = "all",
+    decade = null,
+    release = null,
+    expanded = false,
+    onexpand,
+  }: {
+    cell: SelectedCell | null;
+    indicator: Indicator;
+    p50: number | null;
+    species?: SpeciesState;
+    layerKey?: string;
+    decade?: number | null;
+    release?: string | null;
+    expanded?: boolean;
+    onexpand?: (v: boolean) => void;
+  } = $props();
+
+  let Species = $state.raw<Component<any> | null>(null);
+  $effect(() => {
+    if (species.status !== "idle" && !Species)
+      import("./CellSpecies.svelte").then((m) => (Species = m.default)).catch(() => {});
+  });
 </script>
 
 {#if cell}
@@ -34,9 +59,14 @@
       </tbody>
     </table>
     {#if p50 !== null}<p class="dim">median of the loaded hexagons: {fmt(p50)}</p>{/if}
+    {#if Species && species.status !== "idle"}
+      <div class="sp" data-tour="cell-species">
+        <Species {species} h3={cell.h3} {layerKey} {decade} {release} {expanded} {onexpand} />
+      </div>
+    {/if}
   </div>
 {:else}
-  <p class="dim">Click a hexagon on the map to see all five indicators for it.</p>
+  <p class="dim">Click a hexagon on the map to see all five indicators and the species recorded in it.</p>
 {/if}
 
 <style>
@@ -44,8 +74,9 @@
   p { margin: 0; }
   .mono { font: var(--fw-semibold) var(--text-sm) / 1.3 var(--font-mono); color: var(--text-strong); }
   .dim { color: var(--text-muted); font: var(--type-small); }
-  table { border-collapse: collapse; width: 100%; margin: var(--space-1) 0; }
+  table { border-collapse: collapse; width: 100%; max-width: 24rem; margin: var(--space-1) 0; }
   td { padding: 2px 4px; font: var(--type-small); }
   td:last-child { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
   tr.on td { font-weight: var(--fw-semibold); color: var(--text-strong); background: var(--selected-bg); }
+  .sp { margin-top: var(--space-2); }
 </style>

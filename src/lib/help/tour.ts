@@ -64,7 +64,7 @@ export const TOUR_STOPS: TourStop[] = [
     id: "cell",
     target: [".mbon-pane-pill[aria-label='Show cell pane']", ".cell-pane"],
     title: "The Cell pill",
-    text: "Click a hexagon and this pill lights up. Open it to see all five indicators for that hexagon.",
+    text: "Click a hexagon and this pill lights up. Open it for all five indicators and the species recorded there, with their records and years; expand it for every species, a filter and a CSV.",
   },
   {
     id: "share",

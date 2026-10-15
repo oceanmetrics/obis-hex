@@ -7,7 +7,7 @@
 //
 //   node scripts/shoot.mjs                                          # the deployed app
 //   OBIS_HEX_URL=http://localhost:4173/obis-hex/ node scripts/shoot.mjs   # a local preview
-//   node scripts/shoot.mjs initial                                  # one state only
+//   node scripts/shoot.mjs initial                                  # one state only (or extras, cell)
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -72,6 +72,21 @@ if (!only || only === "extras") {
     await p.locator("details.sqlt > summary").click();
     await p.locator("details.sqlt .timing").evaluate((el) => el.scrollIntoView({ block: "start" }));
     await p.waitForTimeout(400);
+  } });
+}
+// the Cell pane on a Monterey Bay hexagon (0.11.0): its species, then the pane expanded to all of them
+// (laptop, light, the Time strip folded so the pane has the height)
+if (!only || only === "cell") {
+  const cell = `${Q}#i=sp&l=all&p=all&r=7&o=0.85&t=light&d=release&g=flat&c=-122,36.8,9.5&tc=1&x=872834c65ffffff&xo=1`;
+  const species = async (p) => {
+    await p.locator('[data-tour="cell-species"] tbody tr').first().waitFor({ timeout: 60000 });
+    await p.waitForTimeout(400);
+  };
+  await shot({ url: cell, vp: "laptop", file: `${OUT}/cell-species_light_laptop.png`, after: species });
+  await shot({ url: cell, vp: "laptop", file: `${OUT}/cell-species-expanded_light_laptop.png`, after: async (p) => {
+    await species(p);
+    await p.getByRole("button", { name: /^All [\d,]+ species/ }).click();
+    await p.waitForTimeout(600);
   } });
 }
 await b.close();

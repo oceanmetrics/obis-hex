@@ -23,12 +23,18 @@ Conventions for anyone (human or agent) changing obis-hex.
   `@duckdb/duckdb-wasm` is pinned to exactly 1.32.0; do not caret it.
 - **Every query goes through `Engine`** (one connection, one promise chain; whole files cached by
   URL, parent partitions in the DuckDB table `part_cache`, unioned per view by `loadUnion()`). User values reach SQL only through `lit()` (`src/lib/engine/sql.ts`).
-- **One live layer.** `aphia:<id>` (children of a WoRMS AphiaID) is the only layer not in the
+- **One live layer, one live list.** `aphia:<id>` (children of a WoRMS AphiaID) is the only layer not in the
   release: it comes from the h3t subtree service (`src/lib/aphia/h3t.ts`; limits in README, "Any
   taxon (WoRMS)"). Its response still goes through `Engine.loadRemote()` into `part_cache`, so
   every downstream panel treats it like a partition. Never call the service without a bbox at
   res >= 6, keep the request URL's parameter order fixed (it is the cache key, in DuckDB and
-  in Varnish), and handle 413 by stepping down a resolution, not by retrying.
+  in Varnish), and handle 413 by stepping down a resolution, not by retrying. The Cell pane's species
+  list is the service's other use (`/h3t/cell`, `src/lib/cell/species.ts`; README, "Species in a
+  hexagon"): one request per hexagon × layer × decade × release, only while the pane is open, with the
+  same fixed parameter order. The map and its indicators never wait on it; when the service is down the
+  pane says so and links the OBIS checklist. The list must sum to the cell's `n` and count to its `sp`;
+  when it does not, `totalsNote()` says why (another release on the service). `species.ts` and
+  `CellSpecies.svelte` are a lazy chunk, reached only by `import()` (`tests/species.test.ts` checks).
 - **Places come from the gazetteer, not from code.** The Place picker lists `layers.json` and
   `places_index.parquet` (`src/lib/places/index.ts`); never add a place to `regions.ts` (it holds only the
   sea and ocean cameras). A place is keyed by (collection, `place_id`): ids repeat across collections, so
@@ -78,7 +84,7 @@ Conventions for anyone (human or agent) changing obis-hex.
 | path | what |
 |---|---|
 | `src/App.svelte` | the shell: `st` (AppState), derived view, loading effects, map wiring; Header, title sentence, Controls, Cell pane, Time strip, Footer |
-| `src/components/` | TitleSentence (chips), TaxonPanel, PeriodPicker, PlacePanel and PlaceFilter (lazy, behind PlaceGate), ScalePanel, IndicatorPanel, SharePanel, SqlPanel, CellPanel, DecadeBars, AphiaSearch |
+| `src/components/` | TitleSentence (chips), TaxonPanel, PeriodPicker, PlacePanel and PlaceFilter (lazy, behind PlaceGate), ScalePanel, IndicatorPanel, SharePanel, SqlPanel, CellPanel and CellSpecies (lazy), DecadeBars, AphiaSearch |
 | `src/lib/view/sentence.ts` | the title sentence parts and text, hexagon areas, the coverage line |
 | `src/lib/data/taxa.ts` | the taxon picker rows (groups, counts, common names, log bars) |
 | `src/lib/release/decades.ts` | records per decade (sum of `n` of the res-1 decade files), brush ⇄ decade |
@@ -93,6 +99,7 @@ Conventions for anyone (human or agent) changing obis-hex.
 | `src/lib/state/resolution.ts` | zoom → res (Shiny app's breaks), caps 7 / 5 with a decade |
 | `src/lib/state/legacy.ts` | Shiny h3-db bookmark (`?legacy=`) → AppState + notice; Caddy side in `docs/redirect.md` |
 | `src/lib/aphia/h3t.ts` | the live AphiaID layer: h3t URLs, taxon search parsing, fetch, 413 fallback, health probe |
+| `src/lib/cell/species.ts` | the Cell pane's species list (h3t `/h3t/cell`): URL, parser, fetch and cache, totals check, sort, filter, CSV, OBIS checklist link (lazy, with `CellSpecies.svelte`) |
 | `src/components/AphiaSearch.svelte` | the debounced WoRMS name search |
 | `src/lib/view/viewport.ts` | viewport → parent cells (h3-js), the view plan and its fallback |
 | `src/lib/data/layers.ts` | indicators, EOVs, `LayerSel`, layer keys, manifest-layer mapping |
