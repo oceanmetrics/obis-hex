@@ -1,5 +1,9 @@
 # obis-hex
 
+> **Frozen since 2026-10-22:** OBIS hex is moving to the [Ocean Metrics Atlas](https://oceanmetrics.io/atlas/)
+> (build week 4, 2026-11-20 to 11-26, when this address redirects); bug fixes only. The redirect map is written,
+> not activated: [`docs/redirects.md`](docs/redirects.md).
+
 OBIS biodiversity indicators on H3 hexagons, computed from Parquet in the browser.
 
 Live at <https://oceanmetrics.io/obis-hex/>. This is a serverless replacement for the Shiny app
@@ -533,7 +537,7 @@ Measured at 0.3.0 (2026-10-08):
 
 | | gzip | budget |
 |---|---|---|
-| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) → 647.7 KB (0.6.0) → 647.7 KB (0.6.1) → 648.1 KB (0.7.0) → 648.3 KB (0.7.1, 651.1 KB measured in CI) → 649.8 KB (0.8.1) → 652.8 KB (0.10.0) → 653.6 KB (0.11.0) → 653.7 KB (0.11.2) | 660 KB (650 until 0.7.1) |
+| static critical path (MapLibre 6.10, deck.gl 9.4, h3-js, Svelte, app, CSS) | 601.6 KB (0.3.0) → 631.2 KB (0.4.0) → 637.5 KB (0.5.0) → 637.6 KB (0.5.1) → 646.8 KB (0.5.2) → 647.7 KB (0.6.0) → 647.7 KB (0.6.1) → 648.1 KB (0.7.0) → 648.3 KB (0.7.1, 651.1 KB measured in CI) → 649.8 KB (0.8.1) → 652.8 KB (0.10.0) → 653.6 KB (0.11.0) → 653.7 KB (0.11.2) → 654.5 KB (0.11.3) | 660 KB (650 until 0.7.1) |
 | runtime worker (MapLibre's) | 140.2 KB | 150 KB |
 | fonts and images (the kit's nine woff2 faces and the MBON wordmark; 0.4.0) | 538.1 KB raw | 600 KB |
 | DuckDB-WASM (lazy: JS chunk 45 KB, wasm ~7.8 MB) | not counted | must stay lazy |
@@ -553,6 +557,15 @@ forbidden marker in the static graph, like DuckDB's bundle names. 0.11.0 (the sp
 
 ## Versions
 
+- **0.11.3** (2026-10-22): frozen, with a "moving to" banner. A one-line `Notice` (kind `info`, dismissible for the
+  session, sessionStorage key `om-freeze-dismissed`) opens the page: "OBIS hex is frozen. Its layers move to the
+  OceanMetrics Atlas in build week 4 (2026-11-20 to 11-26), when this address redirects.", with the link "Open in the
+  Atlas ↗". The link is `redirectFor(formatHash(st)).url` (`src/lib/redirect.ts`, the map written in
+  `docs/redirects.md`, one test per rule): a layer goes to `/atlas/?c=obis_h3` with `l i p r c` carried (not exact
+  until build week 4), an outlined place with no layer to `/places/p/<id>` (exact). **Nothing is activated**: no 404
+  page, no JavaScript redirect, no DNS. The banner is the first child of the flex column and the stage gives up its
+  height; on a phone it is a tight band. About carries the freeze line; bug fixes only from here. Critical path
+  653.7 -> 654.5 KB gzip (budget 660 KB, not raised).
 - **0.11.2** (2026-10-15): the selected hexagon is outlined in bright pink (6 px; the feedback marks' `#ff2d95`,
   which no viridis cell has), so the hexagon the Cell pane and its species list describe is plain on the map.
   The outline is its own unpickable layer above the cells (`selectedLayer()`, `src/lib/map/hexLayer.ts`), so

@@ -28,6 +28,8 @@
   } from "./lib/release/release";
   import { CONTROL_TABS, controlTab, formatHash, hashHas, isMetricTab, parseHash, tabFor, type AppState, type ControlTab, type MetricTab, type Tab } from "./lib/state/url";
   import { legacyQuery, legacyToState } from "./lib/state/legacy";
+  import { redirectFor } from "./lib/redirect";
+  import { dismissFreeze, FREEZE_ABOUT, FREEZE_LINK, FREEZE_TEXT, freezeDismissed } from "./lib/freeze";
   import { effectiveRes, zoomToRes } from "./lib/state/resolution";
   import { chooseDomain, domainFromStats, viewStats } from "./lib/color/ramp";
   import { createMap, type MapHandle } from "./lib/map/map";
@@ -151,6 +153,13 @@
   let wide = $state(matchMedia("(min-width: 1600px)").matches);
   let wideEnough = $state(!matchMedia("(max-width: 640px)").matches);
   let legacyNotice = $state(fromLegacy?.notice ?? "");
+  // the freeze banner: its link is the redirect map's answer for the view in `st` (the state the hash is written from)
+  let freezeOpen = $state(!freezeDismissed());
+  const closeFreeze = () => {
+    dismissFreeze();
+    freezeOpen = false;
+  };
+  const atlasHref = $derived(redirectFor(formatHash(st)).url);
   let health = $state<"probing" | "ok" | "down">("probing");
   let healthError = $state("");
   let release = $state.raw<ReleaseJson | null>(null);
@@ -1026,6 +1035,11 @@
 </script>
 
 <div class="shell" bind:this={shellEl} data-ready={partition && !loading && (health === "ok" || live) && (live || !statsQ || statsSettled === statsQ) ? "1" : "0"}>
+  {#if freezeOpen}
+    <div class="freeze">
+      <Notice kind="info" ondismiss={closeFreeze}>{FREEZE_TEXT} <a href={atlasHref} target="_blank" rel="noopener">{FREEZE_LINK}</a></Notice>
+    </div>
+  {/if}
   <Header appName="OBIS hex" tagline="biodiversity indicators on H3 hexagons, from Parquet in your browser" appHref="./">
     {#snippet help(close)}
       <button type="button" onclick={() => { close(); startTour(); }}>Take the tour <span class="kbd-hint">?</span></button>
@@ -1199,6 +1213,7 @@
     width={helpModal === "keys" ? "28rem" : "38rem"}>
     <div class="help">
       {#if helpModal === "about"}
+        <p>{FREEZE_ABOUT}</p>
         <p><b>OBIS hex</b> maps biodiversity indicators (ES(50), species richness, Shannon, Simpson, records) of
           OBIS occurrence records on H3 hexagons. The indicators are precomputed by
           <a href="https://github.com/marinebon/obisindicators" target="_blank" rel="noopener">obisindicators</a>{release?.obisindicators_version ? ` ${release.obisindicators_version}` : ""}

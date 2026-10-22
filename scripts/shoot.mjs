@@ -7,7 +7,8 @@
 //
 //   node scripts/shoot.mjs                                          # the deployed app
 //   OBIS_HEX_URL=http://localhost:4173/obis-hex/ node scripts/shoot.mjs   # a local preview
-//   node scripts/shoot.mjs initial                                  # one state only (or extras, cell)
+//   node scripts/shoot.mjs initial                                  # one state only (or extras, cell, banner)
+//   PW_CHANNEL=chrome uses the installed Chrome instead of Playwright's chromium
 import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -23,6 +24,7 @@ const VP = {
 const only = process.argv[2];
 mkdirSync(OUT, { recursive: true });
 const b = await chromium.launch({
+  channel: process.env.PW_CHANNEL || undefined,
   args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"],
 });
 
@@ -90,5 +92,19 @@ if (!only || only === "cell") {
     await p.locator('[data-tour="cell-species"]').evaluate((el) => el.scrollIntoView({ block: "start" }));
     await p.waitForTimeout(200);
   } });
+}
+// the freeze banner (0.11.3): light and dark at 390 px and 1280 px; its note checks the banner's box, that the page does
+// not scroll (the stage gives up the banner's height) and the link's address
+if (!only || only === "banner") {
+  const view = `${Q}#i=es&l=eov:seabirds&p=all&r=3&o=0.85&d=release&g=flat&c=-20,5,1.4`;
+  for (const t of ["light", "dark"]) for (const vp of ["phone", "laptop"]) {
+    const file = `${OUT}/banner_${t}_${vp}.png`;
+    await shot({ url: `${view}&t=${t}`, vp, file, after: async (p) => {
+      console.log(await p.evaluate(() => {
+        const q = (s) => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return `${Math.round(r.top)}+${Math.round(r.height)}`; };
+        return `  freeze ${q(".freeze")} | stage ${q(".stage")} | footer ${q(".mbon-footer")} | scroll ${document.documentElement.scrollHeight}/${innerHeight} x ${document.documentElement.scrollWidth}/${innerWidth} | link ${document.querySelector(".freeze a")?.getAttribute("href")}`;
+      }));
+    } });
+  }
 }
 await b.close();
