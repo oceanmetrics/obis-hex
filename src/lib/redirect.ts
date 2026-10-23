@@ -10,7 +10,8 @@
 // The keys, in the order written: `c=obis_h3` (the collection), `i=<item>` (`all` or an EOV key; a taxon filters `all`),
 // `dim.indicator`, `dim.period` (`<decade>s` or `all`), `res` (`auto` or 1..7, clamped to what the atlas serves),
 // `map=lon,lat,zoom` (this app's camera `c`, read from the old hash only: the atlas's `?c=` is the collection),
-// `taxon=<rank>:<name>` or `aphia:<id>` (split on the FIRST `:`), `proj` (always written: this app opens on the globe),
+// `taxon=<rank>:<name>` or `aphia:<id>` (split on the FIRST `:`), `dom=view` (from `d=view`), `filter=coll:<slug>` (from
+// `f=<collection>`), `proj` (always written: this app opens on the globe),
 // `theme` and `tour` (query switches only), and in the hash `pl=` the outlined place as the atlas's `p.` token. A place
 // outlined with no layer view chosen goes to the Place page. The hash `t` is this app's theme and the atlas's `t` is a
 // report title, so it is never copied. A Shiny bookmark (`?legacy=`) is turned into a hash by legacyToState() first.
@@ -195,8 +196,22 @@ export function redirectFor(link: string, origin: string = OM_ORIGIN): Redirect 
   params.set("map", `${lon},${lat},${zoom}`);
   if (sel.kind === "taxon") params.set("taxon", `${sel.rank}:${sel.taxon}`);
   if (sel.kind === "aphia") params.set("taxon", `aphia:${sel.id}`);
-  params.set("proj", proj);
   const carried = new Set(["i", "l", "p", "r", "c", "g"]);
+  // the ramp domain: `d=view` (the loaded hexagons) is the atlas's `dom=view`; `d=release` (this app's default) and
+  // anything else is the atlas's default, the release's stats.parquet range, so it is not carried
+  if (p.get("d") === "view") {
+    params.set("dom", "view");
+    carried.add("d");
+  }
+  // `f=<collection>` (no ids) is the atlas's `filter=coll:<slug>`; `f=<collection>|<ids>` (some of a collection's
+  // places) and a malformed value are not carried
+  const filt = p.get("f") ?? "";
+  const filterColl = !filt.includes("|") && PLACE_COLL_RE.test(filt) ? filt : null;
+  if (filterColl) {
+    params.set("filter", `coll:${filterColl}`);
+    carried.add("f");
+  }
+  params.set("proj", proj);
   const theme = (q.get("theme") ?? "").toLowerCase();
   if (theme === "dark" || theme === "light") {
     params.set("theme", theme);
@@ -225,10 +240,10 @@ export function redirectFor(link: string, origin: string = OM_ORIGIN): Redirect 
     exact = false;
     notes.push("the selected hexagon (x) is not carried");
   }
-  if (p.has("f") || p.get("v") === "places") {
+  if ((p.has("f") && !filterColl) || p.get("v") === "places") {
     exact = false;
     notes.push(
-      "the place filter (f) and the view as places (v) are not carried; the Place page has the exact values",
+      "the filter by chosen places (f=<collection>|<ids>), a malformed f and the view as places (v) are not carried; the Place page has the exact values",
     );
   }
   if (q.has("data")) {

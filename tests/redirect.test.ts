@@ -15,7 +15,7 @@ interface Case {
 }
 const TABLE = JSON.parse(readFileSync("tests/fixtures/obis_redirect_cases.json", "utf8")) as {
   origin: string;
-  keys: Record<string, { to?: string; rule?: string; drop?: string }>;
+  keys: Record<string, { to?: string; rule?: string; drop?: string; otherwise?: string }>;
   cases: Case[];
 };
 
@@ -51,6 +51,8 @@ describe("the shared obis-hex -> atlas case table", () => {
       const carried = typeof v.to === "string" && typeof v.rule === "string";
       const dropped = typeof v.drop === "string" && v.drop.length > 0;
       expect(carried !== dropped, k).toBe(true);
+      // a carried key may say what happens to its other values (d: view is carried, release is not; f: a bare collection)
+      if (v.otherwise !== undefined) expect(carried, k).toBe(true);
     }
   });
 
@@ -61,6 +63,31 @@ describe("the shared obis-hex -> atlas case table", () => {
 });
 
 describe("redirectFor beyond the table", () => {
+  const H = "#i=es&l=all&p=all&r=auto&c=0,0,1";
+  it("d=view is the atlas's dom=view; d=release and any other d stay dropped (parity row 109)", () => {
+    const view = redirectFor(`${H}&d=view`);
+    expect(new URL(view.url).searchParams.get("dom")).toBe("view");
+    expect(view.dropped).not.toContain("d");
+    expect(view.exact).toBe(true);
+    for (const d of ["release", "x", "", "VIEW"]) {
+      const r = redirectFor(`${H}&d=${d}`);
+      expect(new URL(r.url).searchParams.has("dom"), d).toBe(false);
+      expect(r.dropped, d).toContain("d");
+    }
+    expect(redirectFor(H).dropped).toEqual([]);
+  });
+  it("f=<collection> is the atlas's filter=coll:<slug>; f with ids, a bad slug and v=places stay dropped (parity row 47)", () => {
+    const ok = redirectFor(`${H}&f=noaa_sanctuaries`);
+    expect(new URL(ok.url).searchParams.get("filter")).toBe("coll:noaa_sanctuaries");
+    expect(ok.dropped).not.toContain("f");
+    expect(ok.exact).toBe(true);
+    for (const f of ["noaa_sanctuaries|NMS:CINMS", "places|NMS:CINMS,NMS:MBNMS", "Bad", "a-b", "1abc", "a b", `x${"y".repeat(64)}`]) {
+      const r = redirectFor(`${H}&f=${encodeURIComponent(f)}`);
+      expect(new URL(r.url).searchParams.has("filter"), f).toBe(false);
+      expect(r.dropped, f).toContain("f");
+      expect(r.exact, f).toBe(false);
+    }
+  });
   const A = "https://oceanmetrics.io/atlas/?c=obis_h3&i=all&dim.indicator=es&dim.period=all&res=auto";
   it("takes a bare hash, a query and hash, or a whole URL alike", () => {
     const h = "#i=sp&l=eov:fish&p=1990&r=3&c=-20,5,1.4";
