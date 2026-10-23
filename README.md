@@ -3,6 +3,9 @@
 > **Frozen since 2026-10-22:** OBIS hex is moving to the [Ocean Metrics Atlas](https://oceanmetrics.io/atlas/)
 > (build week 4, 2026-11-20 to 11-26, when this address redirects); bug fixes only. The redirect map is written,
 > not activated: [`docs/redirects.md`](docs/redirects.md).
+>
+> The parity checklist for the fold-in (every feature and URL key, where it goes, what ticks it):
+> [`docs/parity.md`](docs/parity.md).
 
 OBIS biodiversity indicators on H3 hexagons, computed from Parquet in the browser.
 

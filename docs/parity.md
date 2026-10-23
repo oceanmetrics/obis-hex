@@ -1,0 +1,283 @@
+# Parity checklist: obis-hex -> Ocean Metrics
+
+This file is the obis-hex gate of build week 4 of the Ocean Metrics restructure (2026-11-20 to 11-26). It lists every
+user-visible behaviour and URL key of the frozen app, read from the code at 0.11.3 (`ceec7c5`), and says where each one
+lives after the fold-in. obis-hex has no `app/` folder (the source is `src/`), so the checklist is here, in `docs/`.
+The redirect to the atlas ([`redirects.md`](redirects.md), `src/lib/redirect.ts`) is activated only by Ben, after this
+checklist passes and the other preconditions of the plan hold (plan: `notes/om/plans_todo/2026-10-23_week4-atlas-skins-obis-layer_plan.md`, section 7).
+
+How to read it:
+
+- One row is one behaviour or one URL key. "obis-hex (file)" names the file and the function (repo-relative paths).
+  "target" says where it lives after the fold-in, in bold: **atlas OBIS layer** (the obis_h3 collection in
+  oceanmetrics/atlas), **Place page** (places `web`, `/places/p/<id>`, the Species section), **indicators OBIS rows**
+  (the indicators' cards and Matrix reading `place_exact`), **archived app** (obis-hex pinned at a tag: the paper
+  figures, per D7) or **retire or redirect** (the redirect page, the legacy map, the freeze banner, and the behaviours
+  proposed to be dropped).
+- A row is ticked only on evidence the orchestrator can see: a test or a committed shot in the target repo. The
+  "evidence" column names it. Every evidence name that is not yet ticked is a proposed name (the plan's Tests and
+  Shots lists of section 5, spelled out): the implementer may rename it, and then writes the real name when ticking.
+  Atlas tests live in `atlas/tests/obis/`, Playwright specs in `atlas/e2e/obis.spec.ts`, shots in `atlas/docs/shots/`
+  as `obis_<name>_<1280|390>_<light|dark>.png`; the shared redirect table is `tests/fixtures/obis_redirect_cases.json`.
+- A row may be "dropped" only with Ben's word, written in the row. Rows that propose a drop say so in the target
+  column and in the evidence column.
+- Every row starts unticked, with its week: `[ ] week 4` (or `[ ] week 6` for the retire step).
+- Rows marked "none (new)" have no obis-hex source: they are what the atlas adds (year layers, the 125 heads, the
+  Matrix fold, "on the map" from the cards) and are listed so the gate sees them. The row for a species list per
+  place is the same kind (obis-hex lists species per hexagon, not per place).
+- Not in obis-hex, so not rows: GeoJSON export, report export, custom SQL, year ranges finer than a decade, an
+  embed mode (the guide at marinebon.org links to this address). `src/components/Controls.svelte` is an old left panel
+  that `App.svelte` no longer imports; it is not a feature.
+
+**Status 2026-10-23** (orchestrator's evidence: places `web` commit `88c866a`, `web/src/lib/species.ts` and its tests,
+and the committed `web/docs/shots/place_NMS_CINMS_*_sections`): **6 of 128 rows ticked** (65, 66, 67, 68, 69, 71):
+the Place page's Species section already serves the exact per-place records, species and ES(50), their decades and EOV
+groups, the "ES(50) not defined under 50 records" words, the provenance paragraph and the OBIS box links. **122
+open.** By target: atlas OBIS layer 100 rows, 0 ticked, 100 open; Place page 10 rows, 6 ticked, 4 open; indicators OBIS rows 3 rows, 0 ticked, 3 open; archived app 5 rows, 0 ticked, 5 open; retire or redirect 10 rows, 0 ticked, 10 open. Still open on the Place page: the exact species list per place (`species.parquet`, plan
+step 5), the Reproduce line's text, the places table row (Ben's word) and the redirect rule for a place with no layer.
+Rows that need Ben's word before they can close as dropped: the per-place table of many places, view as places, the
+Start here card, the MBON header. Decisions the rows wait on: D7 (paper figures), D8 (`year_min`/`year_max` and the
+decade variant of the species table). Open in week 4 are all the atlas rows: nothing of the OBIS layer exists in the
+atlas yet.
+
+## Layers: the taxon (the Metric tab's Taxon sub-tab, `l=`)
+
+| # | behaviour | obis-hex (file) | target | evidence that ticks it | status |
+|---|---|---|---|---|---|
+| 1 | All taxa is the default layer (`l=all`) | `src/lib/data/layers.ts` `layerKey()`, `parseLayerKey()` | **atlas OBIS layer**: item `all` of the obis_h3 collection | atlas `tests/obis/codec.test.ts` 'item all round-trips'; shot `obis_all_es_globe_res1` | [ ] week 4 |
+| 2 | The 7 Essential Ocean Variables as layers (`l=eov:fish\|hardCorals\|mangroves\|marineMammals\|seabirds\|seagrasses\|seaTurtles`), most records first, record counts, with the link "What defines each EOV?" to the IOOS taxonomy | `layers.ts` `EOVS`, `data/taxa.ts` `taxonItems()`, `TaxonPanel.svelte` | **atlas OBIS layer**: one item per EOV; the link in the layer's Info | atlas `tests/obis/taxa.test.ts` 'the 7 EOV items'; shot `obis_seabirds_1990s` | [ ] week 4 |
+| 3 | Taxon groups by rank as layers (`l=taxon:<rank>:<name>`; 94 phyla, 300 classes, 1,139 orders, 5,837 families from `taxon_groups.parquet`), names percent-encoded, most records first, record counts on a log bar | `data/taxa.ts` `taxonItems()`, `logBar()`, `layers.ts`, `release/release.ts` `taxonGroupsSql()`, `TaxonPanel.svelte` | **atlas OBIS layer**: `taxon=<rank>:<name>` over `taxon_groups.parquet` (`TaxonField.svelte`) | atlas `tests/obis/taxa.test.ts` 'groups by rank, counts, log bar, percent-encoded name' | [ ] week 4 |
+| 4 | Families are listed only while searching (they would bury the list), except the family on the map | `data/taxa.ts` `QUERY_RANKS`, `taxonItems()` `match: "query"` | **atlas OBIS layer**: `TaxonField.svelte` | atlas `tests/obis/taxa.test.ts` 'families only while searching, the selected one stays' | [ ] week 4 |
+| 5 | Common names for the groups people look for (about 140: "Aves — birds"), shown after the scientific name and searchable | `data/taxa.ts` `COMMON_NAMES`, `commonName()` | **atlas OBIS layer**: `TaxonField.svelte` (the table moves with it) | atlas `tests/obis/taxa.test.ts` 'common name leads the label and is a search keyword' | [ ] week 4 |
+| 6 | The taxon picker searches label, rank and common name; the group rows carry the layer key as their id | `TaxonPanel.svelte` (kit `Picker`) | **atlas OBIS layer**: `TaxonField.svelte` | atlas `e2e/obis.spec.ts` 'search aves finds Aves — birds' | [ ] week 4 |
+| 7 | Any taxon (WoRMS): the descendants of any AphiaID as a layer (`l=aphia:<id>`), computed on request; the one layer not in the static release | `data/layers.ts` `LayerSel` `aphia`, `aphia/h3t.ts` `loadAphiaView()`, `fetchSubtree()` | **atlas OBIS layer**: `taxon=aphia:<id>`, the subtree computed in the atlas's DuckDB-WASM over the class files (no h3t) | atlas `tests/obis/subtree.test.ts` 'the subtree SQL equals spike 2 rows, with _none and a name shared by two aphiaids'; shot `obis_cetacea_res5` | [ ] week 4 |
+| 8 | The atlas makes no h3t request: the live service and its health probe ("The WoRMS subtree service (h3t) is unavailable: choose another layer") have no counterpart | `aphia/h3t.ts` `probeH3t()`, `H3T_BASE`, `resolveH3tBase()`; `App.svelte` `h3tHealth` | **atlas OBIS layer**: replaced by the in-page subtree; proposed: nothing to port (Ben's word to drop the unavailable message) | atlas `tests/obis/subtree.test.ts` 'no h3t request anywhere' | [ ] week 4 |
+| 9 | WoRMS name search: at least 2 letters, 250 ms debounce, 20 hits, accepted names first, a synonym shown with its accepted AphiaID, rank, status and records | `components/AphiaSearch.svelte`, `aphia/h3t.ts` `searchUrl()`, `parseTaxonSearch()`, `isSynonym()`, `SEARCH_MIN` | **atlas OBIS layer**: "Search all of WoRMS" over the species lookup's names | atlas `tests/obis/taxa.test.ts` 'WoRMS search: min 2 letters, accepted first, synonym flagged' | [ ] week 4 |
+| 10 | The picked taxon is named in a line (scientific name, rank, status, the accepted name when a synonym, records) with an "in WoRMS" link, and the title chip reads "Whales and dolphins (infraorder Cetacea, WoRMS)" | `TaxonPanel.svelte` `.taxon-line`, `h3t.ts` `parseTaxonInfo()`, `wormsUrl()`, `view/sentence.ts` `taxonPart()` | **atlas OBIS layer**: `TaxonField.svelte`, the layer's title sentence | atlas `tests/obis/taxa.test.ts` 'taxon line and chip words for an aphia layer' | [ ] week 4 |
+| 11 | A WoRMS layer filters decades on the server at any resolution; the ramp spans the loaded hexagons (no release stats); the resolution cap stays 7 (a view's bbox from res 6; 413 over 200,000 cells steps down one res and says so) | `h3t.ts` `loadAphiaView()`, `subtreeBbox()`, `BBOX_MIN_RES`, `MAX_CELLS`, `state/resolution.ts` `resCap(…, live)` | **atlas OBIS layer**: subtree capped at res 5, res 7 only with a viewport filter (plan step 5); the notice words are new | atlas `tests/obis/subtree.test.ts` 'cap 5; res 7 needs a viewport; the notice says what was served' | [ ] week 4 |
+| 12 | The 125 heads (Animalia, Cetacea …) are served as taxon layers from the release (new: obis-hex reaches them only live through h3t) | none (new) | **atlas OBIS layer**: taxon layers from `heads.json`, read from a head when the taxon is one | atlas `tests/obis/subtree.test.ts` 'the head rule: Animalia never reads the class files'; obisindicators testthat 'Animalia head equals the subtree SQL cell for cell' | [ ] week 4 |
+| 13 | A release name with spaces or `%` resolves to its file (`Apicomplexa incertae sedis`; the manifest's `url_path` is encoded twice) | `release/manifest.ts` `partitionValues()`, `Manifest.view()`, `fileUrl()` | **atlas OBIS layer**: the collection's file layout in the atlas reader | atlas `tests/obis/layers.test.ts` 'a taxon with spaces and a percent sign finds its partition' | [ ] week 4 |
+
+## Indicators
+
+| # | behaviour | obis-hex (file) | target | evidence that ticks it | status |
+|---|---|---|---|---|---|
+| 14 | Five indicators: ES(50), species richness, Shannon H′, Simpson Σp², records (`i=es\|sp\|shannon\|simpson\|n`, default `es`), each with a label, a short name and a line of meaning | `data/layers.ts` `INDICATORS`, `INDICATOR_HELP`, `IndicatorPanel.svelte` | **atlas OBIS layer**: `dim.indicator`, from `cube:dimensions` | atlas `tests/obis/codec.test.ts` 'dim.indicator for the five'; `tests/obis/layers.test.ts` 'labels and meaning lines' | [ ] week 4 |
+| 15 | Switching the indicator fetches nothing: every partition carries all five columns | `engine/sql.ts` `VALUE_COLUMNS`, `partitionSql()`, `Engine` | **atlas OBIS layer**: tiles carry `{h3, n, sp, shannon, simpson, es}` and the fill expression picks `['get', indicator]` | atlas `tests/obis/layers.test.ts` 'indicator switch makes no request'; platform `packages/map/test/h3Release.test.ts` 'multi-property feature round trip' | [ ] week 4 |
+| 16 | ES(50) is blank (transparent) where a hexagon has fewer than 50 records; NULLs arrive as NaN | `engine/sql.ts` `partitionSql()`, `map/hexLayer.ts` `cellColors()`, `NULL_COLOR` | **atlas OBIS layer**: null filter in the fill expression | atlas `tests/obis/legend.test.ts` 'null cells are transparent' | [ ] week 4 |
+| 17 | The coverage line: "9,196 of 26,361 hexagons have ≥ 50 records" for ES(50) (the threshold from `release.esn`), "x of y hexagons have a value" or "N hexagons" for the others | `view/sentence.ts` `coverageText()` | **atlas OBIS layer**: hook `atlas:coverage` | atlas `tests/obis/coverage.test.ts` 'the coverage line words' | [ ] week 4 |
+
+## Colour, legend, opacity, labels
+
+| # | behaviour | obis-hex (file) | target | evidence that ticks it | status |
+|---|---|---|---|---|---|
+| 18 | Viridis ramp, nine stops, clamped, a flat domain gives the middle colour | `color/ramp.ts` `VIRIDIS`, `rampColor()` | **atlas OBIS layer**: the layer's ramp | atlas `tests/obis/legend.test.ts` 'viridis stops and clamp' | [ ] week 4 |
+| 19 | Ramp domain "whole release" (`d=release`): p02–p98 of the layer × period × resolution from `stats.parquet`, falling back to min–max, then none | `color/ramp.ts` `domainFromStats()`, `chooseDomain()`, `release/release.ts` `statsSql()` | **atlas OBIS layer**: legend source `stats.parquet`; never the loaded cells by default | atlas `tests/obis/legend.test.ts` 'domain from stats, fallbacks' | [ ] week 4 |
+| 20 | Ramp domain "loaded hexagons" (`d=view`): p02–p98 of the cells loaded for the view (type 7 quantile); a live layer always uses it | `color/ramp.ts` `viewStats()`, `quantileSorted()`, `IndicatorPanel.svelte` More options | **atlas OBIS layer**: domain toggle; the grammar has no key for it (see gaps) | atlas `tests/obis/legend.test.ts` 'view domain equals duckdb quantile_cont' | [ ] week 4 |
+| 21 | The legend: colour bar with the domain and a title that says which domain ("ES(50) · release p02–p98") | `App.svelte` `Legend`, `line2` snippet | **atlas OBIS layer**: `MapLegend` | atlas shot `obis_all_es_globe_res1_1280_light` | [ ] week 4 |
+| 22 | Fill opacity 0–100% in 5% steps (`o=`, default 0.85) | `IndicatorPanel.svelte`, `state/url.ts` `o` | **atlas OBIS layer**: opacity control of the layer | atlas `tests/obis/codec.test.ts` 'opacity round-trips' | [ ] week 4 |
+| 23 | Basemap labels on or off (`b=0`), drawn above the hexagons | `IndicatorPanel.svelte`, `map/map.ts` `createLabelMap()`, `labelStyle()` | **atlas OBIS layer**: labels toggle of the map frame | atlas `e2e/obis.spec.ts` 'labels sit above the hexagons'; shot `obis_fiji_res5` | [ ] week 4 |
+| 24 | Hover shows the hexagon's id and all five indicators, the chosen one emphasised; the cell under the pointer brightens | `App.svelte` `tooltip()`, `cellAt()`, `map/hexLayer.ts` `autoHighlight` | **atlas OBIS layer**: feature hover readout (`queryRenderedFeatures`) | atlas `e2e/obis.spec.ts` 'hover reads five indicators' | [ ] week 4 |
+| 25 | A click selects a hexagon (`x=<h3>`), outlined in pink (#ff2d95, 6 px, not pickable); a click off the cells clears it | `map/hexLayer.ts` `selectedLayer()`, `SELECTED_COLOR`, `App.svelte` `onClick` | **atlas OBIS layer**: selected outline of the layer | atlas `e2e/obis.spec.ts` 'click selects, outline pink, click off clears'; shot `obis_cell_81197ffffffffff` | [ ] week 4 |
+
+## Hexagon size (the resolution ladder, `r=`)
+
+| # | behaviour | obis-hex (file) | target | evidence that ticks it | status |
+|---|---|---|---|---|---|
+| 26 | Auto from zoom: the Shiny app's breaks (0, 2.2, 3.4 … 11.8, 22) give res 1–10, capped at 7 | `state/resolution.ts` `ZOOM_BREAKS`, `zoomToRes()`, `autoRes()` | **atlas OBIS layer**: `res=auto`; `resForZoom` of the h3 provider | platform `packages/map/test/h3Release.test.ts` 'zoom to res table'; atlas `tests/obis/resolution.test.ts` 'auto follows the breaks' | [ ] week 4 |
+| 27 | The cap is 7, or 5 for a decade (the release's decade partitions stop at 5), and the manual value is clamped to it | `state/resolution.ts` `resCap()`, `effectiveRes()`, `RES_DECADE_MAX` | **atlas OBIS layer**: `h3:resolutions` of the item (7, or 5 for a decade or year) | atlas `tests/obis/resolution.test.ts` 'cap 5 with a period' | [ ] week 4 |
+| 28 | Pinned resolution 1–7: an "auto from zoom" toggle and a slider labelled "res 3 · ~12,400 km²"; a change clears the selected hexagon | `components/ScalePanel.svelte`, `state/url.ts` `r` | **atlas OBIS layer**: resolution control (`res=<n>`) | atlas `e2e/obis.spec.ts` 'pin res 4, auto again'; `tests/obis/codec.test.ts` 'res auto and 1..7' | [ ] week 4 |
+| 29 | The hexagon area in words ("~12,400 km² hexagons", three significant digits from 1,000 km², whole km² below) and the footer note "res 3 (auto)" or "(fixed)" | `view/sentence.ts` `hexAreaLabel()`, `scalePart()`, `resNote()` | **atlas OBIS layer**: title sentence and footer | atlas `tests/obis/coverage.test.ts` 'hex area words and res note' | [ ] week 4 |
+| 30 | Viewport loading: only the parent partitions covering the map are read at res 6–7 (`MAX_PARENTS` 64; a ring of parents; Monterey zoom 9 is 7 of 36,893 partitions, 118 KB); whole files at res ≤ 5 | `view/viewport.ts` `planView()`, `coverCells()`, `boundsRings()`, `estimateCells()`, `release/manifest.ts` | **atlas OBIS layer**: tiles by parent from `parent_template` and `parent_res` (no `files.parquet`) | platform `packages/map/test/h3Release.test.ts` 'parent cover at res 6 and 7'; atlas shot `obis_monterey_res7` with the bytes in the footer (≤ 118 KB) | [ ] week 4 |
+| 31 | When a split resolution needs more than 64 partitions a coarser one is shown and the notice says so ("Res 7 needs more than 64 partitions for this view: showing res 6. Zoom in for res 7.") | `view/viewport.ts` `planView()` notice | **atlas OBIS layer**: the notice is new words if tiles never exceed a cap; ticks as 'not needed' only with Ben's word | atlas `tests/obis/resolution.test.ts` 'coarser res and the notice' | [ ] week 4 |
+| 32 | Loaded partitions are kept (an LRU of 512 parent files, whole files by URL), so revisiting a view refetches nothing | `engine/engine.ts` `maxCachedParts`, `loadUnion()`, `loadPartition()` | **atlas OBIS layer**: tile cache of the h3 worker | atlas `e2e/obis.spec.ts` 'pan back, no new request' | [ ] week 4 |
+| 33 | The view crosses ±180 and the world copies: bounds are split into rings of at most 90° and cells straddling the antimeridian are drawn (Fiji, `c=178,-20`) | `view/viewport.ts` `boundsRings()`; README "Globe" | **atlas OBIS layer**: seam spans of the h3 index | platform `packages/map/test/h3Release.test.ts` '0 gap rows at ±180'; atlas shot `obis_fiji_res5` | [ ] week 4 |
+| 34 | "Worldwide" (one whole file) or "in view (7 of 36,893 partitions)" in the title sentence | `view/sentence.ts` `placePart()`, `App.svelte` `placeNote()` | **atlas OBIS layer**: title sentence | atlas `tests/obis/coverage.test.ts` 'worldwide and in view words' | [ ] week 4 |
+
+## Period: decades (`p=`), the Time strip
+
+| # | behaviour | obis-hex (file) | target | evidence that ticks it | status |
+|---|---|---|---|---|---|
+| 35 | All years or one decade, 1960s to 2020s (`p=all\|1960…2020`) | `state/url.ts` `DECADES`, `PeriodPicker.svelte` | **atlas OBIS layer**: `dim.period` (decades and years from `h3:periods`) | atlas `tests/obis/codec.test.ts` 'dim.period all and a decade'; shot `obis_seabirds_1990s` | [ ] week 4 |
+| 36 | Year layers (2015): obis-hex has decades only (new in the atlas) | none (new) | **atlas OBIS layer**: `dim.period=2015` | atlas shot `obis_year_2015`; `tests/obis/codec.test.ts` 'dim.period year' | [ ] week 4 |
+| 37 | Decades exist for all taxa and the EOVs only: taxon groups say "Decades: all taxa and the EOVs only"; a decade is off above res 5 ("Decades: hexagons of res 5 or larger"); picking a taxon group resets the decade | `App.svelte` `decadesAllowed`, `decadeReason`, `PeriodPicker.svelte`, `TaxonPanel.svelte` `pick()` | **atlas OBIS layer**: period control with the reason line | atlas `tests/obis/periods.test.ts` 'decade allowed, reasons, reset on a taxon' | [ ] week 4 |
+| 38 | The Time strip: records per decade for the layer (sum of `n` over the res-1 decade files, one cheap query per layer, cached), the chosen decade highlighted, bar labels (k, M) | `release/decades.ts` `decadeFiles()`, `decadeCountsSql()`, `normalizeCounts()`, `components/DecadeBars.svelte` | **atlas OBIS layer**: hook `atlas:period_strip` from `stats.parquet` | atlas `tests/obis/periods.test.ts` 'the period strip from stats'; shot `obis_seabirds_1990s` | [ ] week 4 |
+| 39 | Brush a decade to map it; click the strip to return to all years; the brush snaps to a decade; ←/→ move the decade and Esc returns to all years | `release/decades.ts` `decadeAt()`, `decadeSpan()`, `App.svelte` `onBrushEnd` | **atlas OBIS layer**: the Time strip | atlas `tests/obis/periods.test.ts` 'brush snaps to a decade'; `e2e/obis.spec.ts` 'strip keys' | [ ] week 4 |
+| 40 | The strip says why it is off (taxon groups; "Live WoRMS layer: records per decade are not precomputed; drag to filter by decade") | `App.svelte` `stripMessage` | **atlas OBIS layer**: period strip message | atlas `tests/obis/periods.test.ts` 'strip message words' | [ ] week 4 |
+| 41 | The strip folds (`tc=1`) and resizes between 48 and 240 px | `App.svelte` `TimeStrip` (kit), `state/url.ts` `tc` | **atlas OBIS layer**: the atlas Time strip | atlas `tests/obis/codec.test.ts` 'tc'; `e2e/obis.spec.ts` 'strip fold' | [ ] week 4 |
+
+## Place: outline, picker, filter (`pl=` `pc=` `f=` `v=`)
+
+| # | behaviour | obis-hex (file) | target | evidence that ticks it | status |
+|---|---|---|---|---|---|
+| 42 | Seas and oceans: 13 camera presets (world, five oceans, Caribbean, Gulf of Maine, North Sea, Mediterranean, Great Barrier Reef, Coral Triangle, Benguela); a sea clears the outlined place | `view/regions.ts` `REGIONS`, `App.svelte` `goTo()` | **atlas OBIS layer**: gazetteer picker's Seas & oceans group | atlas `tests/obis/place.test.ts` 'a sea clears the place and flies' | [ ] week 4 |
+| 43 | The gazetteer picker: 14,734 places in 22 collections, one search over name and id (case and accents ignored, ranked exact, prefix, word prefix, substring), 50 per group then "… N more, type to search", two noisy collections hidden until typed | `places/index.ts` `groupsFor()`, `searchPlaces()`, `GROUP_CAP`, `NOISY_COLLECTIONS`, `PlacePanel.svelte` | **atlas OBIS layer**: the atlas's existing gazetteer picker (`src/lib/gazetteer`), reused | atlas `tests/obis/place.test.ts` 'picker groups, search rank, cap' | [ ] week 4 |
+| 44 | The outlined place (`pl=<id>`, `pc=<collection>` only when the id is in more than one): fitted (`maxZoom` 10, padding 60), antimeridian boxes fitted, a point opens at zoom 8, 12 full-world boxes placed by centroid | `places/index.ts` `cameraFor()`, `resolvePlace()`, `isAmbiguous()`, `App.svelte` `goPlace()` | **atlas OBIS layer**: `pl` (g1 codec) with the place selected | atlas `tests/obis/place.test.ts` 'camera for a place, antimeridian, point, ambiguous id' | [ ] week 4 |
+| 45 | The outline: 2.5 px line over a 5 px casing for polygons and lines, a circle for points, white on dark and navy on light, mirrored in the globe | `map/map.ts` `createOutlineMap()`, `OUTLINE_COLORS`, `placeFilter()`, `kindFilter()` | **atlas OBIS layer**: the atlas place outline | atlas shot `obis_cinms_filtered_1280_dark` | [ ] week 4 |
+| 46 | The place's collection is credited in the attribution control and in Data sources (title, citation, licence), beside OBIS | `places/index.ts` `creditsFor()`, `citationFor()`, `places/urls.ts` `OBIS_CREDIT`, `help/sources.ts` | **atlas OBIS layer**: credits of the place layer in the atlas attribution | atlas `tests/obis/place.test.ts` 'credits and citation for a collection' | [ ] week 4 |
+| 47 | Place filter "only hexagons in" everywhere, this place, or all of its collection (`f=<coll>`, `f=<coll>\|<id>,<id>`, ids sorted, at most 500, a malformed value drops the whole filter) | `state/url.ts` `parseFilter()`, `formatFilter()`, `FILTER_MAX_IDS`, `components/PlaceFilter.svelte` | **atlas OBIS layer**: the place filter, labelled "statistics of the hexagons"; the grammar has no key for it (see gaps) | atlas `tests/obis/codec.test.ts` 'f round-trips, set sorted, malformed dropped' | [ ] week 4 |
+| 48 | The filter is by H3 membership (a cell kept when ≥ 1% of it is inside the place or it holds ≥ 1% of the place), read per resolution and per parent at res 6–7; points and lines have none and say so; too wide a view says "zoom in" | `places/membership.ts` `membershipFiles()`, `filterPartition()`, `MemberCache`, `App.svelte` `filterNote` | **atlas OBIS layer**: membership from the gazetteer, H3 extension in DuckDB-WASM | atlas `tests/obis/place.test.ts` 'membership files per res and parent; notes' | [ ] week 4 |
+| 49 | The filtered view recomputes the ramp, view statistics, coverage line and the Cell pane; while the membership loads nothing is drawn rather than the unfiltered view | `App.svelte` `partition`, `vstats` | **atlas OBIS layer**: place filter | atlas `tests/obis/place.test.ts` 'filtered partition feeds coverage and ramp' | [ ] week 4 |
+| 50 | The sentence says the filter in words ("in Monterey Bay NMS (National Marine Sanctuaries)", "in 3 places", "(every place)"); the filter's places are outlined thinly under the selected place | `view/sentence.ts` `withinPart()`, `map/map.ts` `setAreas()` | **atlas OBIS layer**: title sentence | atlas `tests/obis/coverage.test.ts` 'the place filter's label' | [ ] week 4 |
+| 51 | View as places (`v=places`): the hexagons are hidden and each place of the filter is filled with its value (viridis over the places' own range) | `places/membership.ts` `placeColors()`, `map/map.ts` `setAreas()` `fill` | **retire or redirect**: proposed: dropped in the atlas (the Place page and the indicators rows replace it); Ben's word needed | Ben's word written in this row, or atlas shot `obis_cinms_filtered` with the fill | [ ] week 4 |
+| 52 | The per-place table over the loaded hexagons: hexagons with data, records (Σ n × share), the share-weighted mean of the other indicators, sortable, a row box adds or removes the place from the filter, a row name outlines it, CSV `obis-hex_<coll>_<ind>_res<r>.csv` with the `es_mean_of_hexagons` header | `components/PlaceFilter.svelte`, `places/membership.ts` `placeSummary()`, `placeValue()`, `summaryCsv()` | **Place page**: the exact per-place records, species and ES(50) of the Place page section replace the hexagon statistics (ticked in the three rows below); the sortable table of many places, its row boxes and its CSV are not in the Place page: Ben's word to drop them, or a place-list view | Ben's word written in this row, or places `web` test 'places table sorts, filters and writes CSV' (not written) | [ ] week 4 |
+| 53 | The science caveat is stated: the mean of the hexagons' ES(50) is not the place's own ES(50) | `PlaceFilter.svelte`, `membership.ts` `summaryCsv()` header; README 'The science caveat' | **atlas OBIS layer**: the filter's label "statistics of the hexagons" and a link to the Place page for exact values | atlas `tests/obis/place.test.ts` 'the filter says statistics of the hexagons' | [ ] week 4 |
+
+## Cell pane: the hexagon, its species (the species × hexagon × count table)
+
+| # | behaviour | obis-hex (file) | target | evidence that ticks it | status |
+|---|---|---|---|---|---|
+| 54 | The Cell pill lights ("cell ●") while a hexagon is selected; the pane opens and folds (`xo=1`), sits top right and can be maximised | `App.svelte` `Pane` `cell`, `state/url.ts` `x`, `xo` | **atlas OBIS layer**: `atlas:cell_species` pane with `layout: "h3"` | atlas `e2e/obis.spec.ts` 'cell pill lights and opens'; shot `obis_cell_81197ffffffffff` | [ ] week 4 |
+| 55 | The pane shows the hexagon id, its resolution and area, the layer and the period, all five indicators with the chosen one emphasised, and the median of the loaded hexagons | `components/CellPanel.svelte` | **atlas OBIS layer**: `atlas:cell_species` pane | atlas `tests/obis/cellSpecies.test.ts` 'the five indicators and the median line' | [ ] week 4 |
+| 56 | Empty state: "Click a hexagon on the map to see all five indicators and the species recorded in it." | `CellPanel.svelte` | **atlas OBIS layer**: pane | atlas `e2e/obis.spec.ts` 'empty cell pane' | [ ] week 4 |
+| 57 | The species behind the hexagon's records, filtered as the layer is (all, EOV, taxon group, WoRMS subtree) and by decade: species (linked to WoRMS by AphiaID), phylum, class, order, family, records, share, first and last year | `cell/species.ts` `cellSpeciesUrl()`, `parseCellSpecies()`, `CellSpecies`  | **atlas OBIS layer**: `h3:species_table` read in the atlas (no h3t); `year_min`/`year_max` and the decade variant at res 3 and 4 are decision D8 | atlas `tests/obis/cellSpecies.test.ts` 'the species sum to the cell's n and the names to its sp'; shot `obis_cell_81197ffffffffff` (8,963 species) | [ ] week 4 |
+| 58 | Top 10 species with records and first–last years in the pane, "All 54 species ▸" expands it over the map | `components/CellSpecies.svelte` `TOP_SPECIES`, `yearsText()` | **atlas OBIS layer**: pane | atlas `e2e/obis.spec.ts` 'top 10 then expand' | [ ] week 4 |
+| 59 | The expanded table: a filter (every word must match name, class, family, order or phylum), sorting by six columns (empty values last), share as a percentage ("<0.1%"), the first 500 rows | `cell/species.ts` `filterSpecies()`, `sortSpecies()`, `share()`, `MAX_ROWS` | **atlas OBIS layer**: pane | atlas `tests/obis/cellSpecies.test.ts` 'filter words, sort nulls last, 500 rows' | [ ] week 4 |
+| 60 | CSV of every species (`h3, res, species, aphiaid, phylum, class, order, family, records, share_of_records, year_min, year_max`), named `obis-hex_species_<h3>_<layer>_<period>_<release>.csv` | `cell/species.ts` `speciesCsv()`, `speciesCsvName()` | **atlas OBIS layer**: pane | atlas `tests/obis/cellSpecies.test.ts` 'csv columns and file name' | [ ] week 4 |
+| 61 | A note when the list does not add up ("Species from release v…, the map from v…: their totals differ." or the counts do not match) | `cell/species.ts` `totalsNote()`, `storeRelease()` | **atlas OBIS layer**: pane (one release, so the first case may not arise) | atlas `tests/obis/cellSpecies.test.ts` 'totals note' | [ ] week 4 |
+| 62 | When the species service fails one line says why and links the OBIS API checklist for the hexagon's polygon (live OBIS, counts differ) | `cell/species.ts` `speciesErrorLine()`, `obisChecklistUrl()` | **atlas OBIS layer**: pane error line and the same link | atlas `tests/obis/cellSpecies.test.ts` 'error line and checklist url' | [ ] week 4 |
+| 63 | The list is requested only while the pane is open on a hexagon; the last 32 lists are kept; the map never waits on it; a link with `x=` and `xo=1` opens the same list | `App.svelte` cell-species `$effect`, `cell/species.ts` `loadCellSpecies()`, `CACHE_MAX` | **atlas OBIS layer**: cell query on `species_flat`; budget ≤ 0.6 MB and ≤ 0.3 s | atlas `tests/obis/cellSpecies.test.ts` 'one request per cell; cached' | [ ] week 4 |
+| 64 | The species list of a place (the same table for a whole place, exact, by name) | none in obis-hex (the Place tab lists places, not species) | **Place page**: Place page species section: `place_exact/.../species.parquet`, top 20 then all with filter, sort and CSV (plan step 5; the section links the OBIS mapper and checklist today) | places `web/src/lib/species.test.ts` 'the species.parquet reader and CSV' (not written) | [ ] week 4 |
+
+## Per-place values (exact) in the Place page and the indicators
+
+| # | behaviour | obis-hex (file) | target | evidence that ticks it | status |
+|---|---|---|---|---|---|
+| 65 | A place's records, species and ES(50), counted on the place's own boundary (exact, not by hexagon), every year and the latest decade, in one line ("5,650,862 records of 2,258 species (ES(50) 39.1) in every year; in the 2020s …") | `places/membership.ts` `placeSummary()` (the hexagon version), README 'Filter and summarize by place' | **Place page**: `web/src/lib/species.ts` `obisSummary()`, `obisLine()`, `Species.svelte` | places `web/src/lib/species.test.ts` 'OBIS exact > summarises every year, the decades oldest first, the latest, and the EOV groups with species'; shot `place_NMS_CINMS_{1280,390}_{light,dark}_sections` | [x] 2026-10-23 |
+| 66 | The place's values by decade, oldest first (records, species, ES(50) for 1960s … 2020s) | `state/url.ts` `DECADES`; `release/decades.ts` | **Place page**: the decade table of the Species section | places `web/src/lib/species.test.ts` 'OBIS exact > summarises every year, the decades oldest first, the latest, and the EOV groups with species'; shot `place_NMS_CINMS_{1280,390}_{light,dark}_sections` | [x] 2026-10-23 |
+| 67 | The place's species by EOV group, every year, most species first | `data/layers.ts` `EOVS`; EOV layers | **Place page**: the EOV line of the Species section | places `web/src/lib/species.test.ts` 'OBIS exact > summarises every year, the decades oldest first, the latest, and the EOV groups with species'; shot `place_NMS_CINMS_{1280,390}_{light,dark}_sections` | [x] 2026-10-23 |
+| 68 | ES(50) is said to be undefined under 50 records ("ES(50) not defined (under 50 records)"), as the map leaves such hexagons blank | `view/sentence.ts` `coverageText()`, `ramp`/`NULL_COLOR` | **Place page**: `obisLine()` | places `web/src/lib/species.test.ts` 'OBIS exact > says it in one line, and says when ES(50) is not defined' | [x] 2026-10-23 |
+| 69 | The numbers carry their release, OBIS snapshot and WoRMS version ("obis-h3 release v20261012 (OBIS snapshot 2026-10-11, WoRMS 2026-10-01)") | `export/cite.ts` `footerReleaseText()`, `help/sources.ts` | **Place page**: the provenance paragraph of the Species section | shot `place_NMS_CINMS_1280_light_sections` (the paragraph under the decade table) | [x] 2026-10-23 |
+| 70 | Reproduce for the place's numbers: the release, the snapshot and the query (copyable SQL on `indicators.parquet`) | `components/SharePanel.svelte` 'SQL & timing', `engine/sql.ts` `displaySql()` | **Place page**: `Species.svelte` Reproduce line (collapsed in the shot; its text is not yet asserted) | places `web/src/lib/species.test.ts` 'the reproduce line names release, snapshot and query' (not written), or an opened-Reproduce shot | [ ] week 4 |
+| 71 | The outside check: the OBIS mapper and OBIS checklist links for the place's box | `cell/species.ts` `obisChecklistUrl()` (for a hexagon) | **Place page**: `obisLinks()`, `bboxWkt()` in the Species section (the box, not the hexagon; the hexagon link is the Cell pane row above) | places `web/src/lib/species.test.ts` 'OBIS exact > writes the box as WKT for OBIS, in two parts across the antimeridian' | [x] 2026-10-23 |
+| 72 | An outlined place with no layer chosen opens the Place page (`pl=` with `l=all`): "OBIS on the map" returns from it to the atlas with the place selected | `redirect.ts` `redirectFor()` rule 1 | **Place page**: `/places/p/<id>` and its link `/atlas/?c=obis_h3&pl=…` | obis-hex `tests/redirect.test.ts` over `tests/fixtures/obis_redirect_cases.json` 'pl with no layer'; places `web` deep-link test 'place page answers for a sanctuary id' | [ ] week 4 |
+| 73 | Values per place × EOV × decade (and year) for the indicators' OBIS rows, read from `place_exact` | `places/membership.ts` `placeSummary()`; layer × period selectors | **indicators OBIS rows**: indicators OBIS cards reading `place_exact` (no change per plan step 5) | indicators `viewer` test 'OBIS rows per place, EOV and decade' and the Matrix shot `matrix_obis_*` | [ ] week 4 |
+| 74 | The Matrix fold of the OBIS rows (EOV and decade collapse to a place × indicator cell) | none in obis-hex (new) | **indicators OBIS rows**: indicators Matrix | indicators `viewer` test 'Matrix fold of the OBIS rows' | [ ] week 4 |
+| 75 | "On the map" on an OBIS card opens the atlas on the same layer, indicator and period, place selected | none in obis-hex (new) | **indicators OBIS rows**: `@oceanmetrics/catalog/cards` link | catalog `cards` test 'obis card carries the atlas link with dim.indicator and dim.period' | [ ] week 4 |
+
+## Share, cite, reproduce
+
+| # | behaviour | obis-hex (file) | target | evidence that ticks it | status |
+|---|---|---|---|---|---|
+| 76 | Download PNG: the map with the basemap, hexagons, labels and outline, the title stamped above and the colour scale, OBIS snapshot, release, resolution, version and link below; light and dark; named `obis-hex_<layer>_<period>_res<r>_<indicator>.png` | `export/png.ts` `stampPng()`, `downloadCanvas()`, `pngName()`, `App.svelte` `savePng()` | **atlas OBIS layer**: Share: PNG | atlas `tests/obis/share.test.ts` 'png name and stamp text'; `e2e/obis.spec.ts` 'download png' | [ ] week 4 |
+| 77 | Copy link: the permalink with the whole view | `SharePanel.svelte`, `App.svelte` `permalink` | **atlas OBIS layer**: Share: link | atlas `tests/obis/share.test.ts` 'permalink holds the obis keys' | [ ] week 4 |
+| 78 | Cite this data: the release citation (app version, release, build date, OBIS snapshot, WoRMS, obisindicators, link) then OBIS's own line; Copy citation; also in About | `export/cite.ts` `citeText()`, `releaseCitation()`, `obisCitation()`, `dataDateText()` | **atlas OBIS layer**: Cite | atlas `tests/obis/share.test.ts` 'citation text' | [ ] week 4 |
+| 79 | SQL & timing: the partition path, bytes, cells, ms, partitions fetched and cached, the stats table, records-per-decade ms, the DuckDB version; the copyable SQL that runs as-is in DuckDB, the union SQL for a split view, the ramp-domain query, the request URL for a live layer | `SharePanel.svelte`, `SqlPanel.svelte`, `engine/sql.ts` `displaySql()`, `displayUnionSql()`, `App.svelte` timing snippet | **atlas OBIS layer**: Reproduce (the atlas name for it) | atlas `tests/obis/share.test.ts` 'reproduce sql for a whole file and a parent union' | [ ] week 4 |
+| 80 | The footer: OBIS date, WoRMS version, resolution, app version, bytes and ms, source link | `export/cite.ts` `footerReleaseText()`, `format.ts`, kit `Footer` | **atlas OBIS layer**: atlas footer with the OBIS bytes | atlas shot `obis_monterey_res7_1280_light` (bytes in the footer) | [ ] week 4 |
+| 81 | Exports not in obis-hex: no GeoJSON, no report export, no embed; the guide's embeds are links to this address | README 'Not here' | **retire or redirect**: nothing to port; the marinebon.org guide and embed links change to the atlas (follow-up for Ben) | Ben's word: no row to tick | [ ] week 4 |
+
+## Globe, camera, themes, phone
+
+| # | behaviour | obis-hex (file) | target | evidence that ticks it | status |
+|---|---|---|---|---|---|
+| 82 | Globe by default (MapLibre 6 `projection: globe`), `g=flat` for the flat map, a toggle on the map, the `g` key, and the Place tab's flat/globe buttons; labels and outline mirror the projection | `map/map.ts` `setProjection()`, `state/url.ts` `g`, `App.svelte` `map-tools` | **atlas OBIS layer**: the atlas `proj` | atlas `tests/obis/codec.test.ts` 'proj'; shot `obis_all_es_globe_res1` | [ ] week 4 |
+| 83 | The camera in the URL (`c=lon,lat,zoom`, 3, 3 and 2 decimals; lon −540..540, zoom 0..22); the opening view is North America (−103.7, 33.2, 2.57); a hash change jumps the map | `state/url.ts` `DEFAULT_STATE`, `parseHash()`, `App.svelte` `onHashChange` | **atlas OBIS layer**: `map=lon,lat,zoom` | atlas `tests/obis/codec.test.ts` 'map round-trips and ranges' | [ ] week 4 |
+| 84 | Zoom buttons (no compass), a compact attribution with OBIS and the basemap credit | `map/map.ts` `NavigationControl`, `AttributionControl` | **atlas OBIS layer**: the atlas map frame | atlas shot `obis_all_es_globe_res1_390_dark` | [ ] week 4 |
+| 85 | The map's centre follows the part the panes leave open (camera padding) | `view/padding.ts` `mapPadding()`, `App.svelte` | **atlas OBIS layer**: the atlas frame's own padding (existing) | atlas `tests/map/frame.test.ts` existing padding tests; shot `obis_all_es_globe_res1_1280_light` | [ ] week 4 |
+| 86 | Dark and light themes (`t=`, `?theme=`, the stored kit choice, the header toggle, the `t` key); the basemap swaps (CARTO Dark Matter, Positron) and the ramp, outline and labels follow; the pre-paint script avoids a flash | `state/url.ts` `t`, `index.html`, `map/map.ts` `BASEMAP_STYLE`, `setTheme()` | **atlas OBIS layer**: the atlas themes (existing); no `t` key in the OBIS grammar (see gaps) | atlas shots `obis_*_{light,dark}` | [ ] week 4 |
+| 87 | On a phone (≤ 640 px) the panes are bottom sheets and Controls start folded unless the link says otherwise | `App.svelte` `wideEnough`, `ctlFolded` | **atlas OBIS layer**: atlas phone layout (existing) | atlas shots `obis_*_390_{light,dark}` | [ ] week 4 |
+
+## Title sentence, Controls, messages, data location
+
+| # | behaviour | obis-hex (file) | target | evidence that ticks it | status |
+|---|---|---|---|---|---|
+| 88 | The title sentence is the controls: five chips (taxon, period, place, hexagon size, indicator), each opening the same control as its tab, with qualifiers "(EOV)", "(class Aves)", the common name first | `components/TitleSentence.svelte`, `view/sentence.ts` `sentenceParts()`, `taxonPart()` | **atlas OBIS layer**: the OBIS layer's title sentence | atlas `tests/obis/coverage.test.ts` 'sentence parts for all, eov, taxon, aphia' | [ ] week 4 |
+| 89 | The sentence as plain text for the PNG stamp and the figures log | `view/sentence.ts` `sentenceText()` | **atlas OBIS layer**: report/PNG text | atlas `tests/obis/share.test.ts` 'sentence text' | [ ] week 4 |
+| 90 | Controls in three numbered tabs, ① Metric (Taxon and Indicator sub-tabs), ② Place, ③ Share (`k=`), folding to a pill (`cc=1`); the panes can be moved | `App.svelte` `Controls`, `state/url.ts` `TABS`, `k`, `cc` | **atlas OBIS layer**: the atlas panes (existing); the obis layer's controls | atlas shot `obis_all_es_globe_res1_1280_light` | [ ] week 4 |
+| 91 | Status notices: "Loading release…", "No cells in this view.", "No OBIS records for this taxon in the 1960s in this view.", "Taxon groups have no decade partitions", "Data release unavailable: … (base)", a spinner while loading | `App.svelte` `message`, `noDataReason`, `loadError` | **atlas OBIS layer**: the layer's status line | atlas `tests/obis/layers.test.ts` 'status words' | [ ] week 4 |
+| 92 | The data release: `?data=<https base or /path>` pins one, then `VITE_DATA_BASE`, then `latest.json` (3 s patient timeout), then the constant; a probe of `release.json` | `release/release.ts` `dataBaseOverride()`, `resolveDataBase()`, `probeRelease()`, `timer.ts` `patientTimeout()` | **atlas OBIS layer**: the stable `obis-h3/collection.json`; `?catalog=` for a dry run (step 7) | atlas `e2e/obis.spec.ts` 'survives a release change with ?catalog=' | [ ] week 4 |
+
+## Help, tour, feedback, freeze
+
+| # | behaviour | obis-hex (file) | target | evidence that ticks it | status |
+|---|---|---|---|---|---|
+| 93 | The tour: nine stops (sentence, taxon, indicator, legend, place, Time strip, Cell pill, Share, Help), `?` starts it, ←/→/Home/End/Esc, `?tour=on\|off` | `help/tour.ts` `TOUR_STOPS`, `tourKey()`, `tourStep()`, `components/Tour.svelte` | **atlas OBIS layer**: the atlas tour stops that apply (existing tour, OBIS stops added) | atlas `tests/obis/tour.test.ts` 'obis stops exist and their targets are in the layer' | [ ] week 4 |
+| 94 | The Start here card on a first visit (`obis-hex-welcome`): two doors and three worked questions, each a link | `help/start.ts` `DOORS`, `QUESTIONS`, `startState()`, `Welcome.svelte` | **retire or redirect**: proposed: atlas tour stops or dropped; Ben's word needed | Ben's word written in this row, or atlas `tests/obis/tour.test.ts` 'worked questions open' | [ ] week 4 |
+| 95 | Help menu: Take the tour, Guide, Start here, About, Data sources and attribution, Keyboard, What defines each EOV, Register a product | `App.svelte` `help` snippet, `help/start.ts` `HELP_MODALS`, `?modal=about\|sources\|keys` | **atlas OBIS layer**: the atlas Help (existing) with the OBIS entries | atlas `e2e/obis.spec.ts` 'help entries' | [ ] week 4 |
+| 96 | The Data sources and attribution table (OBIS, WoRMS with DOI, IOOS EOV definitions, CARTO, the gazetteer with the selected collection's licence, software), with citations and licences | `help/sources.ts` `sources()` | **atlas OBIS layer**: the layer's Sources in the atlas | atlas `tests/obis/share.test.ts` 'sources rows and licences' | [ ] week 4 |
+| 97 | The About text: what it maps, the release, OBIS snapshot, WoRMS, build date, MBON credit, licence, version, the citation | `App.svelte` About modal | **atlas OBIS layer**: the layer's About / the atlas About | atlas `e2e/obis.spec.ts` 'about names the release' | [ ] week 4 |
+| 98 | Keyboard: `?` tour, `t` theme, `g` globe or flat, `1` `2` `3` tabs, `+` `−` zoom, `Esc`; never while typing or with Ctrl, Alt or Meta, only Esc while a modal or the tour is open | `help/keys.ts` `SHORTCUTS`, `shortcutFor()` | **atlas OBIS layer**: atlas keys (existing; `g` and tabs are added for the layer) | atlas `tests/obis/keys.test.ts` 'shortcut map and guards' | [ ] week 4 |
+| 99 | Feedback: the bubble, a screenshot of the view, an annotated note, Send to the shared Apps Script or a prefilled GitHub issue, an optional email, "include a link", and Register a product | `components/FeedbackDialog.svelte`, `lib/feedback/*` | **atlas OBIS layer**: the atlas feedback (existing, same Apps Script) | atlas `tests/feedback/*` existing; `e2e/obis.spec.ts` 'feedback carries the obis link' | [ ] week 4 |
+| 100 | The MBON wordmark and the "OBIS hex" header with its tagline | `App.svelte` `Header` | **retire or redirect**: the atlas instance credits MBON (instance `supporters`); Ben's word to drop the header | atlas `tests/instances.test.ts` supporters include MBON | [ ] week 4 |
+| 101 | The freeze banner ("OBIS hex is frozen…", "Open in the Atlas ↗", dismissed per session) and the freeze line in About | `lib/freeze.ts`, `App.svelte` | **retire or redirect**: replaced by the redirect page at activation | obis-hex `tests/freeze.test.ts` retired with the app | [ ] week 6 |
+
+## URL: hash keys (one row per key; the grammar is `?c=obis_h3&i=<item>&dim.indicator=…&dim.period=…&res=…&map=…&taxon=…`)
+
+| # | behaviour | obis-hex (file) | target | evidence that ticks it | status |
+|---|---|---|---|---|---|
+| 102 | `i` indicator → `dim.indicator` | `state/url.ts` `i` | **atlas OBIS layer**: `dim.indicator=es\|sp\|shannon\|simpson\|n` | obis-hex `tests/redirect.test.ts` + atlas codec test over `obis_redirect_cases.json`: 'i' | [ ] week 4 |
+| 103 | `l` layer → `i=<item>` (`all`, EOV) or `taxon=<rank>:<name>\|aphia:<id>` | `state/url.ts` `l`, `data/layers.ts` | **atlas OBIS layer**: item id and `taxon` (the item ids of the EOVs are to be fixed in the table) | same table: 'l all, eov, taxon, aphia, encoded name' | [ ] week 4 |
+| 104 | `p` period → `dim.period` (`all` or a decade; `1990s` in the example) | `state/url.ts` `p` | **atlas OBIS layer**: `dim.period` | same table: 'p' | [ ] week 4 |
+| 105 | `r` resolution → `res` (`auto` or 1–7, clamped by the cap) | `state/url.ts` `r` | **atlas OBIS layer**: `res` | same table: 'r' | [ ] week 4 |
+| 106 | `c` camera → `map=lon,lat,zoom` (obis-hex `c` must not reach the atlas's `?c=` collection key) | `state/url.ts` `c` | **atlas OBIS layer**: `map` | same table: 'c' | [ ] week 4 |
+| 107 | `o` opacity | `state/url.ts` `o` | **atlas OBIS layer**: no key in the grammar | same table: 'o' (or a documented drop) | [ ] week 4 |
+| 108 | `t` theme (`dark\|light`; the atlas reads `t` as the report title) | `state/url.ts` `t` | **atlas OBIS layer**: no key; must not be carried as `t` | same table: 't dropped' | [ ] week 4 |
+| 109 | `d` ramp domain (`release\|view`) | `state/url.ts` `d` | **atlas OBIS layer**: no key in the grammar | same table: 'd' | [ ] week 4 |
+| 110 | `g` projection (`flat`; absent means globe) | `state/url.ts` `g` | **atlas OBIS layer**: the atlas `proj` (not in the example grammar) | same table: 'g flat and the globe default' | [ ] week 4 |
+| 111 | `k` Controls tab, `cc` Controls folded, `tc` Time strip folded | `state/url.ts` `k`, `cc`, `tc` | **atlas OBIS layer**: layout: dropped without a note | same table: 'layout keys dropped' | [ ] week 4 |
+| 112 | `x` the selected hexagon and `xo` the Cell pane open | `state/url.ts` `x`, `xo` | **atlas OBIS layer**: no key in the grammar | same table: 'x and xo' | [ ] week 4 |
+| 113 | `b` basemap labels (`b=0`) | `state/url.ts` `b` | **atlas OBIS layer**: no key in the grammar | same table: 'b' | [ ] week 4 |
+| 114 | `pl` outlined place and `pc` its collection (ids with spaces percent-encoded) | `state/url.ts` `pl`, `pc`, `PLACE_ID_RE` | **atlas OBIS layer**: `pl` in the atlas hash (g1 codec) or the Place page when no layer | same table: 'pl, pc' | [ ] week 4 |
+| 115 | `f` place filter (`<coll>`, `<coll>\|<id>,<id>`) | `state/url.ts` `f` | **atlas OBIS layer**: no key in the grammar | same table: 'f' | [ ] week 4 |
+| 116 | `v=places` view as places | `state/url.ts` `v` | **retire or redirect**: no counterpart (see the view-as-places row) | same table: 'v dropped' | [ ] week 4 |
+
+## URL: query switches (before the `#`) and the redirect
+
+| # | behaviour | obis-hex (file) | target | evidence that ticks it | status |
+|---|---|---|---|---|---|
+| 117 | `?tour=on\|off` and `?modal=about\|sources\|keys` | `help/start.ts` `parseHelpQuery()` | **atlas OBIS layer**: the atlas's own query switches, if any | atlas `tests/obis/tour.test.ts` 'tour and modal switches' or a documented drop | [ ] week 4 |
+| 118 | `?theme=dark\|light` | `state/url.ts`, `App.svelte` `urlTheme()` | **atlas OBIS layer**: the atlas's theme switch, if any | same table: 'theme' | [ ] week 4 |
+| 119 | `?data=<base>` pins a release; `?h3t=` points at another subtree service | `release/release.ts` `dataBaseOverride()`, `aphia/h3t.ts` `resolveH3tBase()` | **atlas OBIS layer**: `?catalog=` for a release; `?h3t=` has no counterpart | atlas `e2e/obis.spec.ts` 'catalog override' | [ ] week 4 |
+| 120 | `?legacy=` Shiny bookmarks (`_inputs_` JSON; presets, rank filters, AphiaIDs, years, resolution, opacity, theme, camera; a notice when only approximated) still map, then go through `redirectFor` | `state/legacy.ts` `legacyToState()`, `legacyQuery()`, `sqlToLayer()`, `docs/redirect.md` (Caddy) | **retire or redirect**: the redirect page runs the legacy map first, then `redirectFor`; the Caddy `h3-db` rule points at the atlas directly (msens follow-up) | obis-hex `tests/legacy.test.ts` kept; a case in the shared table 'legacy bookmark to atlas' | [ ] week 4 |
+| 121 | `redirectFor()` rewritten to the atlas grammar (today it writes hash keys the atlas does not read) | `src/lib/redirect.ts`, `docs/redirects.md` | **retire or redirect**: plan step 5: the shared case table drives both sides | obis-hex `tests/redirect.test.ts` over `tests/fixtures/obis_redirect_cases.json`; atlas codec tests over the same file | [ ] week 4 |
+| 122 | The redirect page: `index.html` on `gh-pages` with `location.replace(redirectFor(…))`, a `<noscript>` link and `rel=canonical`; the app moves to a tag | `docs/redirects.md` 'activation' (not written) | **retire or redirect**: step 7, Ben's word | Playwright spec over the table against production; log entry | [ ] week 6 |
+| 123 | h3t keeps running until week 6 because links into the archived app still call it | `aphia/h3t.ts`, `cell/species.ts` | **retire or redirect**: retire at week 6 | log entry when the service stops | [ ] week 6 |
+
+## Paper figures
+
+| # | behaviour | obis-hex (file) | target | evidence that ticks it | status |
+|---|---|---|---|---|---|
+| 124 | `npm run figures`: three URL states opened in headless Chromium at 1512×798 on SwiftShader, waiting on `.shell[data-ready="1"]`, logging the title sentence | `scripts/figures.mjs`, `App.svelte` `data-ready` | **archived app**: D7: the atlas with a `figures` script over three atlas URLs (recommended), else this app at its tag | atlas `scripts/figures.mjs` output; or the tag `v0.11.x` building and `npm run figures` with `?data=` pinned to v20261012 | [ ] week 4 |
+| 125 | `figA_app_alltaxa_globe_dark.png`: all taxa, ES(50), res 1, dark, globe (`#i=es&l=all&p=all&r=1&o=0.85&t=dark&d=release&g=globe&c=-30,15,1.5`) | `scripts/figures.mjs` `FIGURES[0]`, `figures/` | **archived app**: D7 | atlas `docs/shots/figA_atlas_alltaxa_globe_dark.png` (or the archived figure) | [ ] week 4 |
+| 126 | `figA_app_seagrasses_globe.png`: seagrasses EOV, ES(50), res 1, light, globe | `FIGURES[1]` | **archived app**: D7 | atlas `docs/shots/figA_atlas_seagrasses_globe.png` | [ ] week 4 |
+| 127 | `figA_app_seagrasses_caribbean.png`: seagrasses, ES(50), res 4, the Caribbean, ② Place open (`k=place`) | `FIGURES[2]` | **archived app**: D7 (the layout key `k` has no atlas counterpart; the figure shows the atlas's own panes) | atlas `docs/shots/figA_atlas_seagrasses_caribbean.png` | [ ] week 4 |
+| 128 | UI assessment screenshots (`node scripts/shoot.mjs` into `docs/ui-assessment/after/`) and the size budget (`npm run size-budget`) | `scripts/shoot.mjs`, `scripts/size-budget.mjs` | **archived app**: developer tools; stay with the archived app | none (not user-facing) | [ ] week 4 |
+
+
+## For the redirect rewrite: what the plan's grammar cannot express
+
+Input to the step that rewrites `src/lib/redirect.ts`. The grammar is
+`?c=obis_h3&i=<item>&dim.indicator=…&dim.period=…&res=…&map=…&taxon=…` plus `pl` and `t` in the atlas hash.
+
+- **Keys with no key in the grammar**: `o` opacity, `d` ramp domain, `b` labels, `x` and `xo` (the selected hexagon and
+  the Cell pane open), `f` (the place filter) and `g` (the atlas has `proj`, but the grammar does not list it, and an
+  obis-hex link without `g` is the globe, so the redirect has to write `proj=globe` explicitly if the atlas default is flat).
+  A shared hexagon link (`x=`) cannot be carried today.
+- **Name collisions**: obis-hex's `t` is the theme (`dark|light`) and the atlas's hash `t` is the report title, so `t`
+  must be dropped, never copied. obis-hex's `c` is the camera and the atlas's `?c=` is the collection: the grammar's
+  `map=` avoids it, but the table must say that `c` is read from the old hash only.
+- **`pl`**: obis-hex `pl=<place_id>` (plus `pc`) names a gazetteer place by id; the atlas reads `pl` as the g1 codec.
+  Whether g1 can name a place by (collection, id), or only a geometry, is not settled in the plan; if only a geometry,
+  a redirect page cannot build it without the gazetteer.
+- **A place and the default layer**: `pl` with `l=all` goes to the Place page (`exact: true`) whatever `i`, `p`, `r` and
+  `c` say, because `l=all` is both the default and "no layer chosen". A link that outlined a place on a chosen indicator,
+  period or camera loses them; the rule needs a test on "was anything else non-default".
+- **Period tokens**: the grammar's example is `dim.period=1990s`; obis-hex writes `p=1990` and `p=all`. The value for
+  all years, and the year layers (`2015`), are not written down. Taxon groups with a decade (`p=1990&l=taxon:…`)
+  load nothing in obis-hex ("Taxon groups have no decade partitions"); the redirect should drop the period for them.
+- **Resolution**: `r=7` with a decade is clamped to 5 by obis-hex; `r=6|7` with `aphia:<id>` was allowed through a
+  viewport bbox, and the atlas caps the subtree at 5 (res 7 only with a viewport filter). The redirect must clamp and
+  say so (`exact: false` with a note).
+- **Items**: `i=<item>` for an EOV needs the item ids fixed in the table (`all` and seven EOV keys). A taxon layer has
+  no item; the grammar does not say whether its item is `all`. obis-hex cannot combine an EOV and a taxon.
+- **Taxon names**: `taxon=<rank>:<name>|aphia:<id>` uses `:` and `|` as separators; obis-hex percent-encodes the name
+  inside `l` and the current `redirectFor` decodes it first (`pairs()`), so a name containing an encoded `:` would split
+  wrongly. The table needs a case with a space and a case with an encoded colon.
+- **`v=places`** has no atlas counterpart (proposed: dropped, with the Place page replacing it).
+- **Query switches**: `?data=<base>` pins a release (the D7 fallback and old shared links) and the atlas's nearest is
+  `?catalog=`, which names a catalog, not a release base; `?h3t=` has no counterpart; `?tour`, `?modal` and `?theme` map
+  only if the atlas has the same switches; `?legacy=` must run through `legacyToState()` first, then `redirectFor`.
+- **Namespaces**: the atlas link needs keys both before the `#` (`c`, `i`, `dim.*`, `res`, `map`, `taxon`) and after it
+  (`pl`), while obis-hex's whole view is in the hash; the redirect page writes both parts.
+- **Camera**: `c=lon,lat,zoom` carries the same centre and zoom, but the atlas's panes cover other parts of the map, so
+  the same camera does not show the same view; not expressible, only a note.
