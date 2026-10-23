@@ -30,10 +30,10 @@ How to read it:
   that `App.svelte` no longer imports; it is not a feature.
 
 **Status 2026-10-23** (orchestrator's evidence: places `web` commit `88c866a`, `web/src/lib/species.ts` and its tests,
-and the committed `web/docs/shots/place_NMS_CINMS_*_sections`): **6 of 128 rows ticked** (65, 66, 67, 68, 69, 71):
+and the committed `web/docs/shots/place_NMS_CINMS_*_sections`): **7 of 128 rows ticked** (65, 66, 67, 68, 69, 71, 121):
 the Place page's Species section already serves the exact per-place records, species and ES(50), their decades and EOV
-groups, the "ES(50) not defined under 50 records" words, the provenance paragraph and the OBIS box links. **122
-open.** By target: atlas OBIS layer 100 rows, 0 ticked, 100 open; Place page 10 rows, 6 ticked, 4 open; indicators OBIS rows 3 rows, 0 ticked, 3 open; archived app 5 rows, 0 ticked, 5 open; retire or redirect 10 rows, 0 ticked, 10 open. Still open on the Place page: the exact species list per place (`species.parquet`, plan
+groups, the "ES(50) not defined under 50 records" words, the provenance paragraph and the OBIS box links. **121
+open.** By target: atlas OBIS layer 100 rows, 0 ticked, 100 open; Place page 10 rows, 6 ticked, 4 open; indicators OBIS rows 3 rows, 0 ticked, 3 open; archived app 5 rows, 0 ticked, 5 open; retire or redirect 10 rows, 1 ticked, 9 open. Still open on the Place page: the exact species list per place (`species.parquet`, plan
 step 5), the Reproduce line's text, the places table row (Ben's word) and the redirect rule for a place with no layer.
 Rows that need Ben's word before they can close as dropped: the per-place table of many places, view as places, the
 Start here card, the MBON header. Decisions the rows wait on: D7 (paper figures), D8 (`year_min`/`year_max` and the
@@ -229,8 +229,8 @@ atlas yet.
 | 118 | `?theme=dark\|light` | `state/url.ts`, `App.svelte` `urlTheme()` | **atlas OBIS layer**: the atlas's theme switch, if any | same table: 'theme' | [ ] week 4 |
 | 119 | `?data=<base>` pins a release; `?h3t=` points at another subtree service | `release/release.ts` `dataBaseOverride()`, `aphia/h3t.ts` `resolveH3tBase()` | **atlas OBIS layer**: `?catalog=` for a release; `?h3t=` has no counterpart | atlas `e2e/obis.spec.ts` 'catalog override' | [ ] week 4 |
 | 120 | `?legacy=` Shiny bookmarks (`_inputs_` JSON; presets, rank filters, AphiaIDs, years, resolution, opacity, theme, camera; a notice when only approximated) still map, then go through `redirectFor` | `state/legacy.ts` `legacyToState()`, `legacyQuery()`, `sqlToLayer()`, `docs/redirect.md` (Caddy) | **retire or redirect**: the redirect page runs the legacy map first, then `redirectFor`; the Caddy `h3-db` rule points at the atlas directly (msens follow-up) | obis-hex `tests/legacy.test.ts` kept; a case in the shared table 'legacy bookmark to atlas' | [ ] week 4 |
-| 121 | `redirectFor()` rewritten to the atlas grammar (today it writes hash keys the atlas does not read) | `src/lib/redirect.ts`, `docs/redirects.md` | **retire or redirect**: plan step 5: the shared case table drives both sides | obis-hex `tests/redirect.test.ts` over `tests/fixtures/obis_redirect_cases.json`; atlas codec tests over the same file | [ ] week 4 |
-| 122 | The redirect page: `index.html` on `gh-pages` with `location.replace(redirectFor(…))`, a `<noscript>` link and `rel=canonical`; the app moves to a tag | `docs/redirects.md` 'activation' (not written) | **retire or redirect**: step 7, Ben's word | Playwright spec over the table against production; log entry | [ ] week 6 |
+| 121 | `redirectFor()` rewritten to the atlas grammar (today it writes hash keys the atlas does not read) | `src/lib/redirect.ts`, `docs/redirects.md` | **retire or redirect**: plan step 5: the shared case table drives both sides | obis-hex `tests/redirect.test.ts` over `tests/fixtures/obis_redirect_cases.json`; atlas codec tests over the same file | [x] 2026-10-23 |
+| 122 | The redirect page: `index.html` on `gh-pages` with `location.replace(redirectFor(…))`, a `<noscript>` link and `rel=canonical`; the app moves to a tag | `public/redirect/` (the template, shared with erddap-places), `docs/redirects.md` 'The redirect page' and 'Activation': written 2026-10-23, not active | **retire or redirect**: step 7, Ben's word | Playwright spec over the table against production; log entry | [ ] week 6 |
 | 123 | h3t keeps running until week 6 because links into the archived app still call it | `aphia/h3t.ts`, `cell/species.ts` | **retire or redirect**: retire at week 6 | log entry when the service stops | [ ] week 6 |
 
 ## Paper figures
@@ -246,7 +246,9 @@ atlas yet.
 
 ## For the redirect rewrite: what the plan's grammar cannot express
 
-Input to the step that rewrites `src/lib/redirect.ts`. The grammar is
+Input to the step that rewrote `src/lib/redirect.ts` (done 2026-10-23, row 121: all 32 cases of the shared table agree
+between this app and the atlas codec; the redirect page template is written in `public/redirect/` and is **not active**,
+row 122, `docs/redirects.md` "Activation"). The grammar is
 `?c=obis_h3&i=<item>&dim.indicator=…&dim.period=…&res=…&map=…&taxon=…` plus `pl` and `t` in the atlas hash.
 
 - **Keys with no key in the grammar**: `o` opacity, `d` ramp domain, `b` labels, `x` and `xo` (the selected hexagon and

@@ -1,0 +1,7 @@
+{
+  "app": "OBIS hex",
+  "target": "the Ocean Metrics Atlas",
+  "codec": "./codec.js",
+  "stay": "../",
+  "home": "https://oceanmetrics.io/atlas/?c=obis_h3"
+}
