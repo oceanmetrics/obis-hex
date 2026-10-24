@@ -1,7 +1,7 @@
 # Redirect map: obis-hex -> Ocean Metrics
 
 Written 2026-10-22 (0.11.3, the freeze); the map rewritten to the atlas grammar and the redirect page written 2026-10-23.
-**Not activated.** obis-hex is frozen (bug fixes only); its layers move to the Ocean Metrics Atlas in build week 4
+**Activated 2026-10-24 on Ben's go.** obis-hex is frozen (bug fixes only); its layers move to the Ocean Metrics Atlas in build week 4
 (2026-11-20 to 11-26), when this address redirects. Until then the only use of the map is the freeze banner's link,
 "Open in the Atlas ↗", which shows what the redirect will do. There is no 404 page, no DNS change, and nothing forwards to
 the redirect page. (The other file here, `redirect.md`, is the Caddy redirect for the Shiny app.)
@@ -58,7 +58,7 @@ The page is `https://oceanmetrics.io/obis-hex/redirect/redirect.html`. It passes
 `location.replace`. `?noredirect=1` keeps the page. Copies of the template are identical by checksum:
 `tests/redirectPage.test.ts` pins the SHA-256 (the same constant as erddap-places') and compares with the sibling checkout.
 
-## Activation (Ben's go; not done)
+## Activation (Ben's go 2026-10-24: ACTIVE since that day; `?noredirect=1` keeps the app)
 
 Preconditions (plan section 7 (d)): the parity checklist passes; the atlas OBIS layer reads the stable `obis-h3/collection.json`
 and survives a release change; this map passes the case table and the atlas opens every example above to the same layer,
